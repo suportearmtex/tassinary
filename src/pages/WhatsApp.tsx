@@ -231,6 +231,59 @@ function WhatsApp() {
     }
   };
 
+  const renderQrCodeSection = () => {
+    if (isLoadingInstance || refreshQrCodeMutation.isPending) {
+      return <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />;
+    }
+
+    if (!instance) {
+      return <QrCode className="w-48 h-48 text-gray-400" />;
+    }
+
+    if (instance.status === 'connected') {
+      return (
+        <div className="flex flex-col items-center">
+          <Smartphone className="w-48 h-48 text-green-500" />
+          <p className="text-lg font-medium text-green-500 mt-4">
+            WhatsApp conectado com sucesso!
+          </p>
+        </div>
+      );
+    }
+
+    if (instance.qr_code) {
+      return (
+        <img
+          src={instance.qr_code}
+          alt="WhatsApp QR Code"
+          className="w-48 h-48 object-contain"
+        />
+      );
+    }
+
+    return <QrCode className="w-48 h-48 text-gray-400" />;
+  };
+
+  const getQrCodeMessage = () => {
+    if (isLoadingInstance || refreshQrCodeMutation.isPending) {
+      return 'Carregando QR Code...';
+    }
+
+    if (!instance) {
+      return 'Clique em "Criar Configuração" para começar';
+    }
+
+    if (instance.status === 'connected') {
+      return 'WhatsApp conectado e pronto para uso';
+    }
+
+    if (instance.qr_code) {
+      return 'Escaneie o código QR com seu WhatsApp para conectar';
+    }
+
+    return 'QR Code não disponível';
+  };
+
   return (
     <div className="p-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -243,14 +296,16 @@ function WhatsApp() {
             <div className="flex items-center gap-2">
               {instance ? (
                 <>
-                  <button
-                    onClick={handleRefreshQrCode}
-                    disabled={isLoadingInstance || refreshQrCodeMutation.isPending}
-                    className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${(isLoadingInstance || refreshQrCodeMutation.isPending) ? 'animate-spin' : ''}`} />
-                    Atualizar QR
-                  </button>
+                  {instance.status !== 'connected' && (
+                    <button
+                      onClick={handleRefreshQrCode}
+                      disabled={isLoadingInstance || refreshQrCodeMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${(isLoadingInstance || refreshQrCodeMutation.isPending) ? 'animate-spin' : ''}`} />
+                      Atualizar QR
+                    </button>
+                  )}
                   <button
                     onClick={() => setIsDeleteModalOpen(true)}
                     className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors"
@@ -272,27 +327,9 @@ function WhatsApp() {
             </div>
           </div>
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-            {isLoadingInstance || refreshQrCodeMutation.isPending ? (
-              <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
-            ) : instance?.qr_code && instance.status !== 'connected' ? (
-              <img
-                src={instance.qr_code}
-                alt="WhatsApp QR Code"
-                className="w-48 h-48 object-contain"
-              />
-            ) : (
-              <QrCode className="w-48 h-48 text-gray-400" />
-            )}
+            {renderQrCodeSection()}
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-4">
-              {isLoadingInstance || refreshQrCodeMutation.isPending
-                ? 'Carregando QR Code...'
-                : !instance
-                ? 'Clique em "Criar Configuração" para começar'
-                : instance?.qr_code && instance.status !== 'connected'
-                ? 'Escaneie o código QR com seu WhatsApp para conectar'
-                : instance?.status === 'connected'
-                ? 'WhatsApp conectado'
-                : 'QR Code não disponível'}
+              {getQrCodeMessage()}
             </p>
           </div>
           {instance && (
