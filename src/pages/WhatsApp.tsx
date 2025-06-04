@@ -35,30 +35,23 @@ function WhatsApp() {
         if (!session) throw new Error('No session');
 
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`, {
-          method: 'GET',
           headers: {
             Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json'
           },
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
-          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch Evolution instance');
         }
 
-        const data = await response.json();
-        if (!data) throw new Error('No data received from Evolution API');
-        
-        return data as EvolutionInstance;
+        return response.json() as Promise<EvolutionInstance>;
       } catch (error) {
         console.error('Error fetching Evolution instance:', error);
-        toast.error('Failed to fetch WhatsApp instance status');
         throw error;
       }
     },
     retry: 1,
-    retryDelay: 1000,
   });
 
   const createInstanceMutation = useMutation({
@@ -76,8 +69,8 @@ function WhatsApp() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create instance');
       }
 
       return response.json();
@@ -102,13 +95,12 @@ function WhatsApp() {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
         },
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete instance');
       }
 
       return response.json();
@@ -139,8 +131,8 @@ function WhatsApp() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to refresh QR code');
       }
 
       return response.json();
