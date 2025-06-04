@@ -296,7 +296,7 @@ function WhatsApp() {
               <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
             ) : instance?.qr_code && showQrCode && !instance.status?.includes('connected') ? (
               <img
-                src={instance.qr_code}
+                src={`data:image/png;base64,${instance.qr_code}`}
                 alt="WhatsApp QR Code"
                 className="w-48 h-48 object-contain"
               />
