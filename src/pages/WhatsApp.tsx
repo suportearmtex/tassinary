@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { QrCode, RefreshCw, Smartphone, Loader2, Save, Plus } from 'lucide-react';
+import { QrCode, RefreshCw, Smartphone, Loader2, Save, Plus, Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { MessageTemplate, EvolutionInstance } from '../lib/types';
@@ -24,6 +24,7 @@ function WhatsApp() {
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
   const [showQrCode, setShowQrCode] = useState(false);
   const [isConfigureModalOpen, setIsConfigureModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: instance, isLoading: isLoadingInstance, error: instanceError } = useQuery({
@@ -82,6 +83,36 @@ function WhatsApp() {
     onError: (error: Error) => {
       console.error('Create instance error:', error);
       toast.error(`Erro ao criar instância WhatsApp: ${error.message}`);
+    },
+  });
+
+  const deleteInstanceMutation = useMutation({
+    mutationFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete instance');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
+      setIsDeleteModalOpen(false);
+      toast.success('Instância WhatsApp excluída com sucesso!');
+    },
+    onError: (error: Error) => {
+      console.error('Delete instance error:', error);
+      toast.error(`Erro ao excluir instância WhatsApp: ${error.message}`);
     },
   });
 
@@ -153,6 +184,14 @@ function WhatsApp() {
 
   const handleRefreshQrCode = () => {
     refreshQrCodeMutation.mutate();
+  };
+
+  const handleDeleteInstance = () => {
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteInstance = () => {
+    deleteInstanceMutation.mutate();
   };
 
   const handleSaveTemplate = async (e: React.FormEvent) => {
@@ -233,6 +272,16 @@ function WhatsApp() {
                 >
                   <RefreshCw className={`w-4 h-4 ${(isLoadingInstance || refreshQrCodeMutation.isPending) ? 'animate-spin' : ''}`} />
                   Atualizar QR
+                </button>
+              )}
+              {instance && (
+                <button
+                  onClick={handleDeleteInstance}
+                  disabled={deleteInstanceMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Excluir
                 </button>
               )}
             </div>
@@ -385,6 +434,38 @@ function WhatsApp() {
                   <Loader2 className="w-4 h-4 animate-spin" />
                 )}
                 Criar Instância
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Instance Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Excluir Instância
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              Tem certeza que deseja excluir esta instância do WhatsApp? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDeleteInstance}
+                disabled={deleteInstanceMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteInstanceMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Excluir
               </button>
             </div>
           </div>
