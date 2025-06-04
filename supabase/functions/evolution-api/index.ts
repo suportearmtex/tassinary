@@ -277,12 +277,25 @@ Deno.serve(async (req) => {
       .single();
 
     if (existingInstance) {
-      const status = await checkInstanceStatus(existingInstance.instance_name);
-      
-      if (status !== existingInstance.status) {
+      const currentStatus = await checkInstanceStatus(existingInstance.instance_name);
+      let qrCode = existingInstance.qr_code;
+      let status = currentStatus;
+
+      // If the instance is not connected and we have a QR code, check if we need to refresh it
+      if (!currentStatus.includes('connected') && existingInstance.qr_code) {
+        if (currentStatus === 'disconnected' || currentStatus === 'error') {
+          qrCode = await refreshQrCode(existingInstance.instance_name);
+          if (qrCode) {
+            status = 'created'; // Reset status after generating new QR code
+          }
+        }
+      }
+
+      // Update instance if status or QR code changed
+      if (status !== existingInstance.status || qrCode !== existingInstance.qr_code) {
         const { error: updateError } = await supabase
           .from('evolution_instances')
-          .update({ status })
+          .update({ status, qr_code: qrCode })
           .eq('id', existingInstance.id);
 
         if (updateError) {
@@ -292,7 +305,7 @@ Deno.serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ ...existingInstance, status }),
+        JSON.stringify({ ...existingInstance, qr_code: qrCode, status }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
