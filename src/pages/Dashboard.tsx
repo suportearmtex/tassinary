@@ -1,21 +1,20 @@
 import React, { useState } from 'react';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
+import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Appointment, Client, Service } from '../lib/types';
-import { Calendar as CalendarIcon, Loader2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { format, addMinutes, parseISO, isWithinInterval } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addMinutes, parseISO, isWithinInterval } from 'date-fns';
+import { useAuthStore } from '../store/authStore';
 
 function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [businessHours, setBusinessHours] = useState({
-    start: '08:00',
-    end: '20:00',
-  });
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState('all');
+  const [startDate, setStartDate] = useState(new Date());
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [newAppointment, setNewAppointment] = useState({
     client_id: '',
     service_id: '',
@@ -24,70 +23,109 @@ function Dashboard() {
     time: '',
   });
 
+  const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
 
+  // Função para sincronizar com o Google Calendar
+  const syncWithGoogleCalendar = async (appointment: any, operation: 'create' | 'update' | 'delete') => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-google-calendar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ appointment, operation }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to sync with Google Calendar');
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Error syncing with Google Calendar:', error);
+      throw error;
+    }
+  };
+
+  const calculateEndTime = (startTime: string, duration: string) => {
+    const [hours, minutes] = startTime.split(':');
+    const date = new Date();
+    date.setHours(parseInt(hours), parseInt(minutes));
+    const endDate = addMinutes(date, parseInt(duration));
+    return format(endDate, 'HH:mm');
+  };
+
   const { data: appointments, isLoading: isLoadingAppointments } = useQuery({
-    queryKey: ['appointments'],
+    queryKey: ['appointments', user?.id, dateFilter, startDate],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('appointments')
         .select(`
           *,
           client:clients(*),
           service_details:services(*)
         `)
-        .order('date', { ascending: true });
+        .eq('user_id', user.id);
+
+      if (dateFilter === 'day') {
+        query = query.eq('date', format(startDate, 'yyyy-MM-dd'));
+      } else if (dateFilter === 'week') {
+        query = query
+          .gte('date', format(startOfWeek(startDate), 'yyyy-MM-dd'))
+          .lte('date', format(endOfWeek(startDate), 'yyyy-MM-dd'));
+      } else if (dateFilter === 'month') {
+        query = query
+          .gte('date', format(startOfMonth(startDate), 'yyyy-MM-dd'))
+          .lte('date', format(endOfMonth(startDate), 'yyyy-MM-dd'));
+      }
+
+      const { data, error } = await query.order('date', { ascending: true })
+        .order('time', { ascending: true });
 
       if (error) throw error;
       return data as (Appointment & { client: Client; service_details: Service })[];
     },
+    enabled: !!user?.id,
   });
 
   const { data: clients } = useQuery({
-    queryKey: ['clients'],
+    queryKey: ['clients', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
         .select('*')
+        .eq('user_id', user?.id)
         .order('name', { ascending: true });
 
       if (error) throw error;
       return data as Client[];
     },
+    enabled: !!user?.id,
   });
 
   const { data: services } = useQuery({
-    queryKey: ['services'],
+    queryKey: ['services', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
         .select('*')
+        .eq('user_id', user?.id)
         .order('name', { ascending: true });
 
       if (error) throw error;
       return data as Service[];
     },
+    enabled: !!user?.id,
   });
-
-  const checkAppointmentOverlap = (newStart: Date, duration: number) => {
-    const newEnd = addMinutes(newStart, duration);
-    
-    return appointments?.some(appointment => {
-      if (appointment.date !== format(newStart, 'yyyy-MM-dd')) return false;
-      
-      const existingStart = parseISO(`${appointment.date}T${appointment.time}`);
-      const existingEnd = addMinutes(existingStart, parseInt(appointment.service_details?.duration || '0'));
-      
-      return (
-        isWithinInterval(newStart, { start: existingStart, end: existingEnd }) ||
-        isWithinInterval(newEnd, { start: existingStart, end: existingEnd }) ||
-        isWithinInterval(existingStart, { start: newStart, end: newEnd })
-      );
-    });
-  };
 
   const createAppointmentMutation = useMutation({
     mutationFn: async (appointmentData: typeof newAppointment) => {
@@ -129,16 +167,29 @@ function Dashboard() {
         .insert([{ 
           ...appointmentData, 
           status: 'pending',
-          user_id: user.id // Add user_id to satisfy RLS policy
+          user_id: user.id 
         }])
-        .select()
+        .select(`
+          *,
+          client:clients(*),
+          service_details:services(*)
+        `)
         .single();
 
       if (error) throw error;
+
+      // Sync with Google Calendar
+      try {
+        await syncWithGoogleCalendar(data, 'create');
+      } catch (error) {
+        console.error('Failed to sync with Google Calendar:', error);
+        toast.error('Agendamento criado, mas falhou ao sincronizar com Google Calendar');
+      }
+
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
       setIsModalOpen(false);
       setNewAppointment({ client_id: '', service_id: '', service: '', date: '', time: '' });
       toast.success('Agendamento criado com sucesso!');
@@ -148,129 +199,218 @@ function Dashboard() {
     },
   });
 
-  const events = appointments?.map(appointment => {
-    const startTime = `${appointment.date}T${appointment.time}`;
-    const duration = parseInt(appointment.service_details?.duration || '0');
-    const endTime = format(
-      addMinutes(parseISO(startTime), duration),
-      "yyyy-MM-dd'T'HH:mm:ss"
-    );
+  const updateAppointmentMutation = useMutation({
+    mutationFn: async (appointment: Partial<Appointment> & { id: string }) => {
+      const selectedService = services?.find(s => s.id === appointment.service_id);
+      if (!selectedService) {
+        throw new Error('Serviço não encontrado');
+      }
 
-    return {
-      id: appointment.id,
-      title: `${appointment.client?.name} - ${appointment.service_details?.name}`,
-      start: startTime,
-      end: endTime,
-      className: `status-${appointment.status}`,
-      extendedProps: {
-        client: appointment.client,
-        service: appointment.service_details,
-        status: appointment.status,
-      },
-    };
-  }) || [];
+      const startTime = parseISO(`${appointment.date}T${appointment.time}`);
+      const duration = parseInt(selectedService.duration);
+      const endTime = addMinutes(startTime, duration);
 
-  const handleDateSelect = (selectInfo: any) => {
+      // Check for overlapping appointments
+      const hasOverlap = appointments?.some(existingAppointment => {
+        if (existingAppointment.id === appointment.id) return false;
+        if (existingAppointment.date !== appointment.date) return false;
+
+        const existingStart = parseISO(`${existingAppointment.date}T${existingAppointment.time}`);
+        const existingService = services?.find(s => s.id === existingAppointment.service_id);
+        if (!existingService) return false;
+
+        const existingEnd = addMinutes(existingStart, parseInt(existingService.duration));
+
+        return (
+          (startTime >= existingStart && startTime < existingEnd) ||
+          (endTime > existingStart && endTime <= existingEnd) ||
+          (startTime <= existingStart && endTime >= existingEnd)
+        );
+      });
+
+      if (hasOverlap) {
+        throw new Error('Já existe um agendamento neste horário');
+      }
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .update(appointment)
+        .eq('id', appointment.id)
+        .select(`
+          *,
+          client:clients(*),
+          service_details:services(*)
+        `)
+        .single();
+
+      if (error) throw error;
+
+      // Sync with Google Calendar
+      try {
+        await syncWithGoogleCalendar(data, 'update');
+      } catch (error) {
+        console.error('Failed to sync with Google Calendar:', error);
+        toast.error('Agendamento atualizado, mas falhou ao sincronizar com Google Calendar');
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
+      setIsModalOpen(false);
+      setSelectedAppointment(null);
+      setIsEditMode(false);
+      toast.success('Agendamento atualizado com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const deleteAppointmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const appointment = appointments?.find(apt => apt.id === id);
+      if (!appointment) throw new Error('Appointment not found');
+
+      // Sync with Google Calendar first
+      try {
+        if (appointment.is_synced_to_google) {
+          await syncWithGoogleCalendar(appointment, 'delete');
+        }
+      } catch (error) {
+        console.error('Failed to sync deletion with Google Calendar:', error);
+        toast.error('Erro ao remover evento do Google Calendar');
+      }
+
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
+      setIsDeleteModalOpen(false);
+      setAppointmentToDelete(null);
+      toast.success('Agendamento excluído com sucesso!');
+    },
+    onError: () => {
+      toast.error('Erro ao excluir agendamento');
+    },
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async ({ id, type }: { id: string; type: 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'cancellation' }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointmentId: id,
+          type,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send message');
+      }
+
+      return { id, type };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
+      const messageType = data.type === 'confirmation' ? 'confirmação' : 
+                         data.type === 'reminder_24h' ? 'lembrete (24h)' :
+                         data.type === 'reminder_1h' ? 'lembrete (1h)' : 'cancelamento';
+      toast.success(`Mensagem de ${messageType} enviada com sucesso!`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleEdit = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
     setNewAppointment({
-      ...newAppointment,
-      date: format(selectInfo.start, 'yyyy-MM-dd'),
-      time: format(selectInfo.start, 'HH:mm'),
+      client_id: appointment.client_id,
+      service_id: appointment.service_id,
+      service: appointment.service,
+      date: appointment.date,
+      time: appointment.time,
     });
+    setIsEditMode(true);
     setIsModalOpen(true);
   };
 
-  const handleEventClick = (clickInfo: any) => {
-    const event = clickInfo.event;
-    toast(
-      <div>
-        <p className="font-semibold">{event.title}</p>
-        <p>{format(event.start, 'dd/MM/yyyy HH:mm')}</p>
-        <p>Duração: {event.extendedProps.service?.duration} minutos</p>
-        <p>Status: {event.extendedProps.status}</p>
-      </div>,
-      {
-        duration: 3000,
-        position: 'bottom-right',
-      }
-    );
+  const handleDelete = (id: string) => {
+    setAppointmentToDelete(id);
+    setIsDeleteModalOpen(true);
   };
 
-  const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const serviceId = e.target.value;
-    const selectedService = services?.find(service => service.id === serviceId);
-    setNewAppointment({
-      ...newAppointment,
-      service_id: serviceId,
-      service: selectedService?.name || '',
-    });
+  const confirmDelete = async () => {
+    if (appointmentToDelete) {
+      await deleteAppointmentMutation.mutateAsync(appointmentToDelete);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    createAppointmentMutation.mutate(newAppointment);
+    if (isEditMode && selectedAppointment) {
+      await updateAppointmentMutation.mutateAsync({
+        id: selectedAppointment.id,
+        ...newAppointment,
+      });
+    } else {
+      await createAppointmentMutation.mutateAsync(newAppointment);
+    }
   };
 
-  const stats = [
-    {
-      label: 'Agendamentos Hoje',
-      value: appointments?.filter(
-        (apt) => apt.date === format(new Date(), 'yyyy-MM-dd')
-      ).length || 0,
-    },
-    {
-      label: 'Confirmados',
-      value: appointments?.filter((apt) => apt.status === 'confirmed').length || 0,
-    },
-    {
-      label: 'Pendentes',
-      value: appointments?.filter((apt) => apt.status === 'pending').length || 0,
-    },
-    {
-      label: 'Cancelados',
-      value: appointments?.filter((apt) => apt.status === 'cancelled').length || 0,
-    },
-  ];
+  const handleSendMessage = async (id: string, type: 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'cancellation') => {
+    const appointment = appointments?.find(apt => apt.id === id);
+    if (!appointment?.messages_sent?.[type]) {
+      await sendMessageMutation.mutateAsync({ id, type });
+    } else {
+      toast.error('Esta mensagem já foi enviada anteriormente');
+    }
+  };
+
+  if (isLoadingAppointments) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat, index) => (
-          <div
-            key={index}
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700"
-          >
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</h3>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
-              {stat.value}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Calendar Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Calendário de Agendamentos
-          </h2>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600 dark:text-gray-400">Início:</label>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Agendamentos</h2>
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="all">Todos</option>
+                <option value="day">Hoje</option>
+                <option value="week">Esta Semana</option>
+                <option value="month">Este Mês</option>
+              </select>
               <input
-                type="time"
-                value={businessHours.start}
-                onChange={(e) => setBusinessHours({ ...businessHours, start: e.target.value })}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600 dark:text-gray-400">Fim:</label>
-              <input
-                type="time"
-                value={businessHours.end}
-                onChange={(e) => setBusinessHours({ ...businessHours, end: e.target.value })}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2"
+                type="date"
+                value={format(startDate, 'yyyy-MM-dd')}
+                onChange={(e) => setStartDate(new Date(e.target.value))}
+                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
             <button
@@ -282,49 +422,113 @@ function Dashboard() {
             </button>
           </div>
         </div>
-        {isLoadingAppointments ? (
-          <div className="h-[600px] flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          </div>
-        ) : (
-          <div className="h-[600px]">
-            <FullCalendar
-              plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-              initialView="timeGridWeek"
-              headerToolbar={{
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay',
-              }}
-              events={events}
-              slotMinTime={businessHours.start}
-              slotMaxTime={businessHours.end}
-              locale="pt-br"
-              allDaySlot={false}
-              editable={false}
-              selectable={true}
-              selectMirror={true}
-              dayMaxEvents={true}
-              select={handleDateSelect}
-              eventClick={handleEventClick}
-              slotDuration="00:30:00"
-              snapDuration="00:15:00"
-              businessHours={{
-                daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-                startTime: businessHours.start,
-                endTime: businessHours.end,
-              }}
-            />
-          </div>
-        )}
+        <div className="divide-y divide-gray-100 dark:divide-gray-700">
+          {appointments?.map((appointment) => (
+            <div key={appointment.id} className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="flex-shrink-0">
+                    <User className="w-10 h-10 text-gray-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                      {appointment.client?.name}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {appointment.service_details?.name}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-8">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {new Date(appointment.date).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {appointment.time} - {calculateEndTime(appointment.time, appointment.service_details?.duration || '0')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleEdit(appointment)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(appointment.id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => handleSendMessage(appointment.id, 'confirmation')}
+                  disabled={appointment.messages_sent?.confirmation}
+                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
+                    appointment.messages_sent?.confirmation
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
+                      : 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  {appointment.messages_sent?.confirmation ? 'Enviado' : 'Confirmação'}
+                </button>
+                <button
+                  onClick={() => handleSendMessage(appointment.id, 'reminder_24h')}
+                  disabled={appointment.messages_sent?.reminder_24h}
+                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
+                    appointment.messages_sent?.reminder_24h
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
+                      : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  {appointment.messages_sent?.reminder_24h ? 'Enviado' : 'Lembrete (24h)'}
+                </button>
+                <button
+                  onClick={() => handleSendMessage(appointment.id, 'reminder_1h')}
+                  disabled={appointment.messages_sent?.reminder_1h}
+                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
+                    appointment.messages_sent?.reminder_1h
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
+                      : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  {appointment.messages_sent?.reminder_1h ? 'Enviado' : 'Lembrete (1h)'}
+                </button>
+                <button
+                  onClick={() => handleSendMessage(appointment.id, 'cancellation')}
+                  disabled={appointment.messages_sent?.cancellation}
+                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
+                    appointment.messages_sent?.cancellation
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
+                      : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  {appointment.messages_sent?.cancellation ? 'Enviado' : 'Cancelamento'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* New Appointment Modal */}
+      {/* Appointment Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Novo Agendamento
+              {isEditMode ? 'Editar Agendamento' : 'Novo Agendamento'}
             </h3>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
@@ -358,13 +562,19 @@ function Dashboard() {
                   <select
                     required
                     value={newAppointment.service_id}
-                    onChange={handleServiceChange}
+                    onChange={(e) =>
+                      setNewAppointment({
+                        ...newAppointment,
+                        service_id: e.target.value,
+                        service: services?.find(s => s.id === e.target.value)?.name || '',
+                      })
+                    }
                     className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">Selecione um serviço</option>
                     {services?.map((service) => (
                       <option key={service.id} value={service.id}>
-                        {service.name} - {service.duration} minutos
+                        {service.name} - {service.duration}
                       </option>
                     ))}
                   </select>
@@ -390,37 +600,48 @@ function Dashboard() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Horário
                   </label>
-                  <input
-                    type="time"
-                    required
-                    value={newAppointment.time}
-                    onChange={(e) =>
-                      setNewAppointment({
-                        ...newAppointment,
-                        time: e.target.value,
-                      })
-                    }
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      required
+                      value={newAppointment.time}
+                      onChange={(e) =>
+                        setNewAppointment({
+                          ...newAppointment,
+                          time: e.target.value,
+                        })
+                      }
+                      className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {newAppointment.service_id && newAppointment.time && (
+                      <div className="mt-1 p-2 bg-gray-100 dark:bg-gray-700 rounded-md text-gray-500 dark:text-gray-400">
+                        até {calculateEndTime(newAppointment.time, services?.find(s => s.id === newAppointment.service_id)?.duration || '0')}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="mt-6 flex justify-end space-x-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setIsEditMode(false);
+                    setSelectedAppointment(null);
+                  }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={createAppointmentMutation.isPending}
+                  disabled={createAppointmentMutation.isPending || updateAppointmentMutation.isPending}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {createAppointmentMutation.isPending && (
+                  {(createAppointmentMutation.isPending || updateAppointmentMutation.isPending) && (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   )}
-                  Salvar
+                  {isEditMode ? 'Atualizar' : 'Salvar'}
                 </button>
               </div>
             </form>
@@ -428,32 +649,36 @@ function Dashboard() {
         </div>
       )}
 
-      <style>{`
-        .status-pending { background-color: #FEF3C7; border-color: #F59E0B; }
-        .status-confirmed { background-color: #D1FAE5; border-color: #10B981; }
-        .status-cancelled { background-color: #FEE2E2; border-color: #EF4444; }
-
-        .dark .status-pending { background-color: #78350F; border-color: #F59E0B; }
-        .dark .status-confirmed { background-color: #064E3B; border-color: #10B981; }
-        .dark .status-cancelled { background-color: #7F1D1D; border-color: #EF4444; }
-
-        .fc { height: 100%; }
-        .fc-theme-standard td { border: 1px solid #E5E7EB; }
-        .dark .fc-theme-standard td { border-color: #374151; }
-        .fc-theme-standard th { border: 1px solid #E5E7EB; background: #F3F4F6; }
-        .dark .fc-theme-standard th { border-color: #374151; background: #1F2937; }
-        .fc-theme-standard .fc-scrollgrid { border: 1px solid #E5E7EB; }
-        .dark .fc-theme-standard .fc-scrollgrid { border-color: #374151; }
-        .fc-theme-standard td.fc-today { background: #EFF6FF; }
-        .dark .fc-theme-standard td.fc-today { background: #1E3A8A; }
-        .fc-day-today { background: #EFF6FF !important; }
-        .dark .fc-day-today { background: #1E3A8A !important; }
-        .fc-button { background: #F3F4F6 !important; border: 1px solid #E5E7EB !important; color: #374151 !important; }
-        .dark .fc-button { background: #374151 !important; border-color: #4B5563 !important; color: #F3F4F6 !important; }
-        .fc-button-active { background: #2563EB !important; color: white !important; }
-        .dark .fc-button-active { background: #1D4ED8 !important; }
-        .fc-timegrid-slot { height: 48px !important; }
-      `}</style>
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Confirmar Exclusão
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Tem certeza que deseja excluir este agendamento?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setAppointmentToDelete(null);
+                }}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
