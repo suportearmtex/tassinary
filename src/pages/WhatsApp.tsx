@@ -50,7 +50,7 @@ function WhatsApp() {
         throw error;
       }
     },
-    refetchInterval: instance?.status === 'connected' ? false : 15000,
+    refetchInterval: (data) => data?.status === 'connected' ? false : 15000,
     retry: 1,
   });
 
