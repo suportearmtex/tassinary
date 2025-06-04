@@ -5,8 +5,6 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 
-
-
 function Settings() {
   const [isConnecting, setIsConnecting] = useState(false);
   const user = useAuthStore((state) => state.user);
@@ -59,60 +57,107 @@ function Settings() {
   }, [queryClient, user?.id]);
 
   const handleGoogleConnect = async () => {
-  try {
-    setIsConnecting(true);
-    
-    // Verificar se há uma sessão válida
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      throw new Error('Erro ao obter sessão de autenticação');
+    try {
+      setIsConnecting(true);
+      
+      // Verificar se há uma sessão válida
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error('Erro ao obter sessão de autenticação');
+      }
+      
+      if (!session) {
+        throw new Error('Usuário não autenticado. Faça login novamente.');
+      }
+
+      if (!session.access_token) {
+        throw new Error('Token de acesso não encontrado');
+      }
+
+      // Verificar se o token não expirou
+      const now = Math.floor(Date.now() / 1000);
+      if (session.expires_at && session.expires_at < now) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+
+      console.log('Session valid, starting OAuth flow');
+
+      // Usar a função SQL em vez da Edge Function
+      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/handle_google_oauth`;
+      const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
+      const state = session.access_token;
+
+      // Verificar se as variáveis de ambiente estão disponíveis
+      if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+        throw new Error('Google Client ID não configurado');
+      }
+
+      if (!import.meta.env.VITE_SUPABASE_URL) {
+        throw new Error('Supabase URL não configurada');
+      }
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
+        `?client_id=${encodeURIComponent(import.meta.env.VITE_GOOGLE_CLIENT_ID)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${scope}` +
+        `&access_type=offline` +
+        `&prompt=consent` +
+        `&state=${encodeURIComponent(state)}`;
+
+      console.log('Opening OAuth window with URL:', authUrl);
+
+      const width = 600;
+      const height = 700;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+
+      const popup = window.open(
+        authUrl,
+        'google-oauth',
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+
+      if (!popup) {
+        throw new Error('Não foi possível abrir a janela de autenticação. Verifique se o bloqueador de pop-ups está desabilitado.');
+      }
+
+      // Verificar se a janela foi fechada sem completar o processo
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          if (isConnecting) {
+            setIsConnecting(false);
+            toast.error('Processo de autenticação cancelado');
+          }
+        }
+      }, 1000);
+
+      // Timeout de segurança
+      setTimeout(() => {
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+        clearInterval(checkClosed);
+        if (isConnecting) {
+          setIsConnecting(false);
+          toast.error('Tempo limite excedido para autenticação');
+        }
+      }, 300000); // 5 minutos
+
+    } catch (error) {
+      console.error('Error starting OAuth flow:', error);
+      setIsConnecting(false);
+      
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error('Erro desconhecido ao iniciar processo de conexão');
+      }
     }
-    
-    if (!session) {
-      throw new Error('Usuário não autenticado. Faça login novamente.');
-    }
-
-    if (!session.access_token) {
-      throw new Error('Token de acesso não encontrado');
-    }
-
-    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-oauth-callback`;
-    const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
-    const state = session.access_token;
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
-      `?client_id=${encodeURIComponent(import.meta.env.VITE_GOOGLE_CLIENT_ID)}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&response_type=code` +
-      `&scope=${scope}` +
-      `&access_type=offline` +
-      `&prompt=consent` +
-      `&state=${encodeURIComponent(state)}`;
-
-    const width = 600;
-    const height = 700;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    window.open(
-      authUrl,
-      'google-oauth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
-
-  } catch (error) {
-    console.error('Error starting OAuth flow:', error);
-    setIsConnecting(false);
-    
-    if (error instanceof Error) {
-      toast.error(error.message);
-    } else {
-      toast.error('Erro desconhecido ao iniciar processo de conexão');
-    }
-  }
-};
+  };
 
   const handleGoogleDisconnect = () => {
     if (window.confirm('Tem certeza que deseja desconectar o Google Calendar?')) {
@@ -223,7 +268,10 @@ function Settings() {
                   </p>
                 </div>
               </div>
-              <button className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              <button 
+                onClick={() => window.location.href = '/whatsapp'}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
                 Configurar
               </button>
             </div>
@@ -243,6 +291,7 @@ function Settings() {
                     <p>Google Client ID: {import.meta.env.VITE_GOOGLE_CLIENT_ID ? '✓ Configurado' : '✗ Não configurado'}</p>
                     <p>Supabase URL: {import.meta.env.VITE_SUPABASE_URL ? '✓ Configurado' : '✗ Não configurado'}</p>
                     <p>Token Google: {googleToken ? '✓ Existe' : '✗ Não existe'}</p>
+                    <p>Callback URL: {`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/handle_google_oauth`}</p>
                   </div>
                 </div>
               </div>
