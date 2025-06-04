@@ -15,7 +15,6 @@ const corsHeaders = {
 
 async function checkInstanceStatus(instanceName: string) {
   try {
-    console.log(`Checking status for instance: ${instanceName}`);
     const response = await fetch(`${evolutionApiUrl}/instance/connectionState/${instanceName}`, {
       headers: {
         'apikey': evolutionApiKey,
@@ -23,12 +22,10 @@ async function checkInstanceStatus(instanceName: string) {
     });
 
     if (!response.ok) {
-      console.error(`Status check failed with status: ${response.status}`);
       throw new Error('Failed to check instance status');
     }
 
     const data = await response.json();
-    console.log(`Instance status: ${data.state}`);
     return data.state || 'disconnected';
   } catch (error) {
     console.error('Error checking instance status:', error);
@@ -38,7 +35,6 @@ async function checkInstanceStatus(instanceName: string) {
 
 async function refreshQrCode(instanceName: string) {
   try {
-    console.log(`Refreshing QR code for instance: ${instanceName}`);
     const response = await fetch(`${evolutionApiUrl}/instance/connect/${instanceName}`, {
       headers: {
         'apikey': evolutionApiKey,
@@ -46,12 +42,10 @@ async function refreshQrCode(instanceName: string) {
     });
 
     if (!response.ok) {
-      console.error(`QR code refresh failed with status: ${response.status}`);
       throw new Error('Failed to refresh QR code');
     }
 
     const data = await response.json();
-    console.log('QR code refreshed successfully');
     return data.base64;
   } catch (error) {
     console.error('Error refreshing QR code:', error);
@@ -61,7 +55,6 @@ async function refreshQrCode(instanceName: string) {
 
 async function deleteInstance(instanceName: string) {
   try {
-    console.log(`Deleting instance: ${instanceName}`);
     const response = await fetch(`${evolutionApiUrl}/instance/delete/${instanceName}`, {
       method: 'DELETE',
       headers: {
@@ -70,11 +63,9 @@ async function deleteInstance(instanceName: string) {
     });
 
     if (!response.ok) {
-      console.error(`Instance deletion failed with status: ${response.status}`);
       throw new Error('Failed to delete instance');
     }
 
-    console.log('Instance deleted successfully');
     return true;
   } catch (error) {
     console.error('Error deleting instance:', error);
@@ -84,7 +75,6 @@ async function deleteInstance(instanceName: string) {
 
 async function createEvolutionInstance(userId: string, userEmail: string) {
   try {
-    console.log(`Creating instance for user: ${userEmail}`);
     const timestamp = new Date().getTime();
     const instanceName = `tssaas-${userEmail.split('@')[0]}-${timestamp}`;
     
@@ -97,20 +87,15 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
       body: JSON.stringify({
         instanceName,
         qrcode: true,
-        integration: "WHATSAPP-BAILEYS",
-        reject_call: true,
-        groups_ignore: true,
+        number: '5511999999999',
+        token: evolutionApiKey,
       }),
     });
 
     if (!createResponse.ok) {
-      console.error(`Instance creation failed with status: ${createResponse.status}`);
-      const errorText = await createResponse.text();
-      console.error('Error response:', errorText);
-      throw new Error(`Failed to create Evolution instance: ${errorText}`);
+      throw new Error('Failed to create Evolution instance');
     }
 
-    console.log('Instance created successfully');
     const qrCode = await refreshQrCode(instanceName);
 
     const { error: insertError } = await supabase
@@ -123,14 +108,12 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
       }]);
 
     if (insertError) {
-      console.error('Database insertion error:', insertError);
       throw new Error('Failed to store instance information');
     }
 
-    console.log('Instance information stored in database');
     return { instanceName, qrCode };
   } catch (error) {
-    console.error('Error in createEvolutionInstance:', error);
+    console.error('Error creating Evolution instance:', error);
     throw error;
   }
 }
@@ -141,7 +124,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log(`Handling ${req.method} request`);
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       throw new Error('No authorization header');
@@ -152,13 +134,11 @@ Deno.serve(async (req) => {
     );
 
     if (authError || !user) {
-      console.error('Authentication error:', authError);
       throw new Error('Invalid authorization');
     }
 
     // Handle DELETE request
     if (req.method === 'DELETE') {
-      console.log('Processing DELETE request');
       const { data: existingInstance } = await supabase
         .from('evolution_instances')
         .select('*')
@@ -174,7 +154,6 @@ Deno.serve(async (req) => {
           .eq('user_id', user.id);
 
         if (deleteError) {
-          console.error('Database deletion error:', deleteError);
           throw new Error('Failed to delete instance record');
         }
       }
@@ -189,7 +168,6 @@ Deno.serve(async (req) => {
 
     // Handle POST request
     if (req.method === 'POST') {
-      console.log('Processing POST request');
       const body = await req.json();
       const { type } = body;
 
@@ -214,7 +192,6 @@ Deno.serve(async (req) => {
             .eq('user_id', user.id);
 
           if (deleteError) {
-            console.error('Database deletion error:', deleteError);
             throw new Error('Failed to delete existing instance');
           }
         }
@@ -230,7 +207,6 @@ Deno.serve(async (req) => {
       }
 
       if (type === 'refresh') {
-        console.log('Processing refresh request');
         const { data: existingInstance } = await supabase
           .from('evolution_instances')
           .select('*')
@@ -253,7 +229,6 @@ Deno.serve(async (req) => {
           .eq('id', existingInstance.id);
 
         if (updateError) {
-          console.error('Database update error:', updateError);
           throw new Error('Failed to update instance');
         }
 
@@ -269,7 +244,6 @@ Deno.serve(async (req) => {
     }
 
     // Handle GET request
-    console.log('Processing GET request');
     const { data: existingInstance } = await supabase
       .from('evolution_instances')
       .select('*')
@@ -286,7 +260,6 @@ Deno.serve(async (req) => {
           .eq('id', existingInstance.id);
 
         if (updateError) {
-          console.error('Database update error:', updateError);
           throw new Error('Failed to update instance status');
         }
       }
@@ -306,7 +279,6 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Request handling error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
