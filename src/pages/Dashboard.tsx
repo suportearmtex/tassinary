@@ -9,7 +9,6 @@ import { Appointment, Client, Service } from '../lib/types';
 import { Calendar as CalendarIcon, Loader2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format, addMinutes, parseISO, isWithinInterval } from 'date-fns';
-import { useAuthStore } from '../store/authStore';
 
 function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,7 +25,6 @@ function Dashboard() {
   });
 
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
 
   const { data: appointments, isLoading: isLoadingAppointments } = useQuery({
     queryKey: ['appointments'],
@@ -90,10 +88,6 @@ function Dashboard() {
 
   const createAppointmentMutation = useMutation({
     mutationFn: async (appointmentData: typeof newAppointment) => {
-      if (!user?.id) {
-        throw new Error('Usuário não autenticado');
-      }
-
       const selectedService = services?.find(s => s.id === appointmentData.service_id);
       if (!selectedService) {
         throw new Error('Serviço não encontrado');
@@ -126,11 +120,7 @@ function Dashboard() {
 
       const { data, error } = await supabase
         .from('appointments')
-        .insert([{ 
-          ...appointmentData, 
-          status: 'pending',
-          user_id: user.id // Add the user_id to the appointment data
-        }])
+        .insert([{ ...appointmentData, status: 'pending' }])
         .select()
         .single();
 
