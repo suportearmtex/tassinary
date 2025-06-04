@@ -227,28 +227,34 @@ function Appointments() {
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ id, type }: { id: string; type: 'confirmation' | 'reminder' | 'cancellation' }) => {
-      const appointment = appointments?.find(apt => apt.id === id);
-      if (!appointment) throw new Error('Agendamento não encontrado');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
 
-      const messages_sent = {
-        ...appointment.messages_sent,
-        [type]: true
-      };
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointmentId: id,
+          type,
+        }),
+      });
 
-      const { error } = await supabase
-        .from('appointments')
-        .update({ messages_sent })
-        .eq('id', id);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send message');
+      }
 
-      if (error) throw error;
       return { id, type };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
-      toast.success(`Mensagem de ${data.type} enviada com sucesso!`);
+      toast.success(`Mensagem de ${data.type === 'confirmation' ? 'confirmação' : data.type === 'reminder' ? 'lembrete' : 'cancelamento'} enviada com sucesso!`);
     },
-    onError: () => {
-      toast.error('Erro ao enviar mensagem');
+    onError: (error: Error) => {
+      toast.error(error.message);
     },
   });
 
