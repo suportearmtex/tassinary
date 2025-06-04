@@ -73,7 +73,19 @@ Deno.serve(async (req) => {
       throw new Error('WhatsApp instance not found');
     }
 
-    if (instance.status !== 'connected') {
+    // Check if WhatsApp is connected by calling the connectionState endpoint
+    const stateResponse = await fetch(`${evolutionApiUrl}/instance/connectionState/${instance.instance_name}`, {
+      headers: {
+        'apikey': evolutionApiKey,
+      },
+    });
+
+    if (!stateResponse.ok) {
+      throw new Error('Failed to check WhatsApp connection state');
+    }
+
+    const stateData = await stateResponse.json();
+    if (stateData.state !== 'open') {
       throw new Error('WhatsApp is not connected');
     }
 
