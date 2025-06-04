@@ -184,41 +184,33 @@ Deno.serve(async (req) => {
     if (existingInstance) {
       try {
         const currentStatus = await checkInstanceStatus(existingInstance.instance_name);
+        let updateData: { status: string; qr_code?: string | null } = { status: currentStatus };
         
-        if (req.method === 'POST' || currentStatus !== 'connected') {
+        // Only refresh QR code if not connected and explicitly requested or status changed from connected
+        if (req.method === 'POST' || (currentStatus !== 'connected' && existingInstance.status === 'connected')) {
           const newQrCode = await refreshQrCode(existingInstance.instance_name);
-          
           if (newQrCode) {
-            const { error: updateError } = await supabase
-              .from('evolution_instances')
-              .update({
-                qr_code: newQrCode,
-                status: currentStatus,
-              })
-              .eq('id', existingInstance.id);
-
-            if (updateError) {
-              throw new Error('Failed to update instance information');
-            }
-
-            return new Response(
-              JSON.stringify({ ...existingInstance, qr_code: newQrCode, status: currentStatus }),
-              {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              }
-            );
+            updateData.qr_code = newQrCode;
           }
         }
 
-        if (currentStatus !== existingInstance.status) {
+        // Always update status in database if it changed
+        if (currentStatus !== existingInstance.status || updateData.qr_code) {
           const { error: updateError } = await supabase
             .from('evolution_instances')
-            .update({ status: currentStatus })
+            .update(updateData)
             .eq('id', existingInstance.id);
 
           if (updateError) {
-            throw new Error('Failed to update instance status');
+            throw new Error('Failed to update instance information');
           }
+
+          return new Response(
+            JSON.stringify({ ...existingInstance, ...updateData }),
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
         }
 
         return new Response(
