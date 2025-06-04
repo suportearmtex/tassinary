@@ -1,17 +1,26 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.7';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const evolutionApiUrl = 'https://api.evolution-api.com/v1';
-const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || 'f466697bcf9be76a260709b1fba28464';
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
 };
+
+// Check required environment variables
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Required environment variables SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
+}
+
+if (!evolutionApiKey) {
+  throw new Error('Required environment variable EVOLUTION_API_KEY must be set');
+}
+
+const evolutionApiUrl = 'https://api.evolution-api.com/v1';
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function checkInstanceStatus(instanceName: string) {
   try {
@@ -152,6 +161,7 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
 }
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -160,7 +170,13 @@ Deno.serve(async (req) => {
     console.log(`Handling ${req.method} request`);
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      throw new Error('No authorization header');
+      return new Response(
+        JSON.stringify({ error: 'No authorization header provided' }),
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const { data: { user }, error: authError } = await supabase.auth.getUser(
@@ -169,7 +185,13 @@ Deno.serve(async (req) => {
 
     if (authError || !user) {
       console.error('Authentication error:', authError);
-      throw new Error('Invalid authorization');
+      return new Response(
+        JSON.stringify({ error: 'Invalid authorization token' }),
+        { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // Handle DELETE request
@@ -210,7 +232,13 @@ Deno.serve(async (req) => {
       const { type } = body;
 
       if (!type) {
-        throw new Error('Missing type parameter');
+        return new Response(
+          JSON.stringify({ error: 'Missing type parameter' }),
+          { 
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
       }
 
       if (type === 'create') {
@@ -254,7 +282,13 @@ Deno.serve(async (req) => {
           .single();
 
         if (!existingInstance) {
-          throw new Error('No instance found');
+          return new Response(
+            JSON.stringify({ error: 'No instance found' }),
+            { 
+              status: 404,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
         }
 
         const qrCode = await refreshQrCode(existingInstance.instance_name);
@@ -281,7 +315,13 @@ Deno.serve(async (req) => {
         );
       }
 
-      throw new Error('Invalid type parameter');
+      return new Response(
+        JSON.stringify({ error: 'Invalid type parameter' }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // Handle GET request
@@ -339,11 +379,11 @@ Deno.serve(async (req) => {
     console.error('Request handling error:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: error.message || 'Internal server error',
         details: error.stack 
       }),
       {
-        status: 400,
+        status: error.message.includes('environment variable') ? 500 : 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
