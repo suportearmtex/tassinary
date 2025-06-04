@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 
 function Settings() {
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
 
@@ -36,9 +37,11 @@ function Settings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['google-token', user?.id] });
+      setIsDisconnectModalOpen(false);
       toast.success('Google Calendar desconectado com sucesso!');
     },
     onError: () => {
+      setIsDisconnectModalOpen(false);
       toast.error('Erro ao desconectar Google Calendar');
     },
   });
@@ -57,50 +60,52 @@ function Settings() {
   }, [queryClient, user?.id]);
 
   const handleGoogleConnect = async () => {
-  try {
-    setIsConnecting(true);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw new Error('Usuário não autenticado');
+    try {
+      setIsConnecting(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // URL com API key
+      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-oauth-callback`;
+      const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
+      const state = session.access_token;
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
+        `?client_id=${encodeURIComponent(import.meta.env.VITE_GOOGLE_CLIENT_ID)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${scope}` +
+        `&access_type=offline` +
+        `&prompt=consent` +
+        `&state=${encodeURIComponent(state)}`;
+
+      const width = 600;
+      const height = 700;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+
+      window.open(
+        authUrl,
+        'google-oauth',
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+
+    } catch (error) {
+      console.error('Error starting OAuth flow:', error);
+      setIsConnecting(false);
+      toast.error('Erro ao iniciar processo de conexão');
     }
-
-    // URL com API key
-    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-oauth-callback`;
-    const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
-    const state = session.access_token;
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
-      `?client_id=${encodeURIComponent(import.meta.env.VITE_GOOGLE_CLIENT_ID)}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&response_type=code` +
-      `&scope=${scope}` +
-      `&access_type=offline` +
-      `&prompt=consent` +
-      `&state=${encodeURIComponent(state)}`;
-
-    const width = 600;
-    const height = 700;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    window.open(
-      authUrl,
-      'google-oauth',
-      `width=${width},height=${height},left=${left},top=${top}`
-    );
-
-  } catch (error) {
-    console.error('Error starting OAuth flow:', error);
-    setIsConnecting(false);
-    toast.error('Erro ao iniciar processo de conexão');
-  }
-};
+  };
 
   const handleGoogleDisconnect = () => {
-    if (window.confirm('Tem certeza que deseja desconectar o Google Calendar?')) {
-      disconnectGoogleMutation.mutate();
-    }
+    setIsDisconnectModalOpen(true);
+  };
+
+  const confirmDisconnect = () => {
+    disconnectGoogleMutation.mutate();
   };
 
   return (
@@ -237,6 +242,38 @@ function Settings() {
           )}
         </div>
       </div>
+
+      {/* Disconnect Confirmation Modal */}
+      {isDisconnectModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Confirmar Desconexão
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Tem certeza que deseja desconectar o Google Calendar? Seus agendamentos não serão mais sincronizados automaticamente.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsDisconnectModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDisconnect}
+                disabled={disconnectGoogleMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {disconnectGoogleMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
