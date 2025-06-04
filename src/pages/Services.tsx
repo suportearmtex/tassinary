@@ -9,6 +9,8 @@ import { useAuthStore } from '../store/authStore';
 function Services() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [newService, setNewService] = useState({
     name: '',
@@ -90,6 +92,8 @@ function Services() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services', user?.id] });
+      setIsDeleteModalOpen(false);
+      setServiceToDelete(null);
       toast.success('Serviço excluído com sucesso!');
     },
     onError: () => {
@@ -107,9 +111,14 @@ function Services() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este serviço?')) {
-      await deleteServiceMutation.mutateAsync(id);
+  const handleDelete = (id: string) => {
+    setServiceToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (serviceToDelete) {
+      await deleteServiceMutation.mutateAsync(serviceToDelete);
     }
   };
 
@@ -211,7 +220,7 @@ function Services() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Form Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
@@ -274,6 +283,41 @@ function Services() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Confirmar Exclusão
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Tem certeza que deseja excluir este serviço? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setServiceToDelete(null);
+                }}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleteServiceMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteServiceMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Confirmar
+              </button>
+            </div>
           </div>
         </div>
       )}

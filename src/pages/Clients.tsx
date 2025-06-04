@@ -11,6 +11,8 @@ import { useAuthStore } from '../store/authStore';
 function Clients() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [newClient, setNewClient] = useState({
     name: '',
@@ -93,6 +95,8 @@ function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients', user?.id] });
+      setIsDeleteModalOpen(false);
+      setClientToDelete(null);
       toast.success('Cliente excluído com sucesso!');
     },
     onError: () => {
@@ -111,9 +115,14 @@ function Clients() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este cliente?')) {
-      await deleteClientMutation.mutateAsync(id);
+  const handleDelete = (id: string) => {
+    setClientToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (clientToDelete) {
+      await deleteClientMutation.mutateAsync(clientToDelete);
     }
   };
 
@@ -234,7 +243,7 @@ function Clients() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Form Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
@@ -309,6 +318,41 @@ function Clients() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Confirmar Exclusão
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setClientToDelete(null);
+                }}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleteClientMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteClientMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Confirmar
+              </button>
+            </div>
           </div>
         </div>
       )}
