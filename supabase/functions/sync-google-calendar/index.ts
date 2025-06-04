@@ -43,18 +43,27 @@ async function syncAppointmentToGoogle(
   accessToken: string,
   operation: 'create' | 'update' | 'delete'
 ) {
+  // Calculate start and end times in the correct format
+  const startDateTime = `${appointment.date}T${appointment.time}:00`;
+  const endDateTime = new Date(`${appointment.date}T${appointment.time}`);
+  endDateTime.setMinutes(endDateTime.getMinutes() + appointment.service_details.duration);
+  
+  const formattedEndTime = endDateTime.toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
   const eventData = {
     summary: `${appointment.client.name} - ${appointment.service_details.name}`,
     description: `Agendamento via Agenda Pro\n\nCliente: ${appointment.client.name}\nServiço: ${appointment.service_details.name}\nDuração: ${appointment.service_details.duration} minutos`,
     start: {
-      dateTime: `${appointment.date}T${appointment.time}:00`,
+      dateTime: startDateTime,
       timeZone: 'America/Sao_Paulo',
     },
     end: {
-      dateTime: new Date(
-        new Date(`${appointment.date}T${appointment.time}:00`).getTime() +
-          appointment.service_details.duration * 60000
-      ).toISOString(),
+      dateTime: `${appointment.date}T${formattedEndTime}`,
       timeZone: 'America/Sao_Paulo',
     },
   };
@@ -93,7 +102,8 @@ async function syncAppointmentToGoogle(
   }
 
   if (!response?.ok) {
-    throw new Error(`Failed to ${operation} event in Google Calendar`);
+    const errorData = await response?.json();
+    throw new Error(`Failed to ${operation} event in Google Calendar: ${errorData?.error?.message || 'Unknown error'}`);
   }
 
   if (operation === 'delete') return null;
