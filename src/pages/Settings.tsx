@@ -57,107 +57,45 @@ function Settings() {
   }, [queryClient, user?.id]);
 
   const handleGoogleConnect = async () => {
-    try {
-      setIsConnecting(true);
-      
-      // Verificar se há uma sessão válida
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        throw new Error('Erro ao obter sessão de autenticação');
-      }
-      
-      if (!session) {
-        throw new Error('Usuário não autenticado. Faça login novamente.');
-      }
-
-      if (!session.access_token) {
-        throw new Error('Token de acesso não encontrado');
-      }
-
-      // Verificar se o token não expirou
-      const now = Math.floor(Date.now() / 1000);
-      if (session.expires_at && session.expires_at < now) {
-        throw new Error('Sessão expirada. Faça login novamente.');
-      }
-
-      console.log('Session valid, starting OAuth flow');
-
-      // Usar a função SQL em vez da Edge Function
-      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/handle_google_oauth`;
-      const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
-      const state = session.access_token;
-
-      // Verificar se as variáveis de ambiente estão disponíveis
-      if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
-        throw new Error('Google Client ID não configurado');
-      }
-
-      if (!import.meta.env.VITE_SUPABASE_URL) {
-        throw new Error('Supabase URL não configurada');
-      }
-
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
-        `?client_id=${encodeURIComponent(import.meta.env.VITE_GOOGLE_CLIENT_ID)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=code` +
-        `&scope=${scope}` +
-        `&access_type=offline` +
-        `&prompt=consent` +
-        `&state=${encodeURIComponent(state)}`;
-
-      console.log('Opening OAuth window with URL:', authUrl);
-
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-
-      const popup = window.open(
-        authUrl,
-        'google-oauth',
-        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-      );
-
-      if (!popup) {
-        throw new Error('Não foi possível abrir a janela de autenticação. Verifique se o bloqueador de pop-ups está desabilitado.');
-      }
-
-      // Verificar se a janela foi fechada sem completar o processo
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          if (isConnecting) {
-            setIsConnecting(false);
-            toast.error('Processo de autenticação cancelado');
-          }
-        }
-      }, 1000);
-
-      // Timeout de segurança
-      setTimeout(() => {
-        if (popup && !popup.closed) {
-          popup.close();
-        }
-        clearInterval(checkClosed);
-        if (isConnecting) {
-          setIsConnecting(false);
-          toast.error('Tempo limite excedido para autenticação');
-        }
-      }, 300000); // 5 minutos
-
-    } catch (error) {
-      console.error('Error starting OAuth flow:', error);
-      setIsConnecting(false);
-      
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error('Erro desconhecido ao iniciar processo de conexão');
-      }
+  try {
+    setIsConnecting(true);
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('Usuário não autenticado');
     }
-  };
+
+    // URL com API key
+    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/handle_google_oauth?apikey=${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
+    const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
+    const state = session.access_token;
+
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
+      `?client_id=${encodeURIComponent(import.meta.env.VITE_GOOGLE_CLIENT_ID)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=code` +
+      `&scope=${scope}` +
+      `&access_type=offline` +
+      `&prompt=consent` +
+      `&state=${encodeURIComponent(state)}`;
+
+    const width = 600;
+    const height = 700;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    window.open(
+      authUrl,
+      'google-oauth',
+      `width=${width},height=${height},left=${left},top=${top}`
+    );
+
+  } catch (error) {
+    console.error('Error starting OAuth flow:', error);
+    setIsConnecting(false);
+    toast.error('Erro ao iniciar processo de conexão');
+  }
+};
 
   const handleGoogleDisconnect = () => {
     if (window.confirm('Tem certeza que deseja desconectar o Google Calendar?')) {
