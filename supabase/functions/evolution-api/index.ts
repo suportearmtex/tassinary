@@ -2,8 +2,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.39.7';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const evolutionApiUrl = 'https://evapi.armtexapi.org';
-const evolutionApiKey = 'f466697bcf9be76a260709b1fba28464';
+const evolutionApiUrl = 'https://api.evolution-api.com/v1';
+const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY') || 'f466697bcf9be76a260709b1fba28464';
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -24,7 +24,9 @@ async function checkInstanceStatus(instanceName: string) {
 
     if (!response.ok) {
       console.error(`Status check failed with status: ${response.status}`);
-      throw new Error('Failed to check instance status');
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      throw new Error(`Failed to check instance status: ${errorText}`);
     }
 
     const data = await response.json();
@@ -47,7 +49,9 @@ async function refreshQrCode(instanceName: string) {
 
     if (!response.ok) {
       console.error(`QR code refresh failed with status: ${response.status}`);
-      throw new Error('Failed to refresh QR code');
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      throw new Error(`Failed to refresh QR code: ${errorText}`);
     }
 
     const data = await response.json();
@@ -71,7 +75,9 @@ async function deleteInstance(instanceName: string) {
 
     if (!response.ok) {
       console.error(`Instance deletion failed with status: ${response.status}`);
-      throw new Error('Failed to delete instance');
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      throw new Error(`Failed to delete instance: ${errorText}`);
     }
 
     console.log('Instance deleted successfully');
@@ -110,8 +116,16 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
       throw new Error(`Failed to create Evolution instance: ${errorText}`);
     }
 
-    console.log('Instance created successfully');
+    const createData = await createResponse.json();
+    console.log('Instance created successfully:', createData);
+
+    // Wait a moment for the instance to initialize
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     const qrCode = await refreshQrCode(instanceName);
+    if (!qrCode) {
+      throw new Error('Failed to generate QR code for new instance');
+    }
 
     const { error: insertError } = await supabase
       .from('evolution_instances')
@@ -124,6 +138,8 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
 
     if (insertError) {
       console.error('Database insertion error:', insertError);
+      // Clean up the created instance if database insertion fails
+      await deleteInstance(instanceName);
       throw new Error('Failed to store instance information');
     }
 
@@ -322,7 +338,10 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Request handling error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack 
+      }),
       {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
