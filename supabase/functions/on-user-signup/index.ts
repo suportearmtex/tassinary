@@ -2,8 +2,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.39.7';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const evolutionApiUrl = 'https://evapi.armtexapi.org';
-const evolutionApiKey = 'f466697bcf9be76a260709b1fba28464';
+const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL')!;
+const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY')!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
