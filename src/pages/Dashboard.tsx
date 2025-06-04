@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2 } from 'lucide-react';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Appointment, Client, Service } from '../lib/types';
+import { Calendar as CalendarIcon, Clock, User, Plus, Loader2, Send, Trash2, Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addMinutes, parseISO, isWithinInterval } from 'date-fns';
+import { format, addMinutes, parseISO, isWithinInterval } from 'date-fns';
 import { useAuthStore } from '../store/authStore';
 
 function Dashboard() {
@@ -12,8 +16,10 @@ function Dashboard() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState('all');
-  const [startDate, setStartDate] = useState(new Date());
+  const [businessHours, setBusinessHours] = useState({
+    start: '08:00',
+    end: '20:00',
+  });
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [newAppointment, setNewAppointment] = useState({
     client_id: '',
@@ -53,42 +59,21 @@ function Dashboard() {
     }
   };
 
-  const calculateEndTime = (startTime: string, duration: string) => {
-    const [hours, minutes] = startTime.split(':');
-    const date = new Date();
-    date.setHours(parseInt(hours), parseInt(minutes));
-    const endDate = addMinutes(date, parseInt(duration));
-    return format(endDate, 'HH:mm');
-  };
-
   const { data: appointments, isLoading: isLoadingAppointments } = useQuery({
-    queryKey: ['appointments', user?.id, dateFilter, startDate],
+    queryKey: ['appointments', user?.id],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      let query = supabase
+      const { data, error } = await supabase
         .from('appointments')
         .select(`
           *,
           client:clients(*),
           service_details:services(*)
         `)
-        .eq('user_id', user.id);
-
-      if (dateFilter === 'day') {
-        query = query.eq('date', format(startDate, 'yyyy-MM-dd'));
-      } else if (dateFilter === 'week') {
-        query = query
-          .gte('date', format(startOfWeek(startDate), 'yyyy-MM-dd'))
-          .lte('date', format(endOfWeek(startDate), 'yyyy-MM-dd'));
-      } else if (dateFilter === 'month') {
-        query = query
-          .gte('date', format(startOfMonth(startDate), 'yyyy-MM-dd'))
-          .lte('date', format(endOfMonth(startDate), 'yyyy-MM-dd'));
-      }
-
-      const { data, error } = await query.order('date', { ascending: true })
+        .eq('user_id', user.id)
+        .order('date', { ascending: true })
         .order('time', { ascending: true });
 
       if (error) throw error;
@@ -336,17 +321,30 @@ function Dashboard() {
     },
   });
 
-  const handleEdit = (appointment: Appointment) => {
-    setSelectedAppointment(appointment);
+  const handleDateSelect = (selectInfo: any) => {
     setNewAppointment({
-      client_id: appointment.client_id,
-      service_id: appointment.service_id,
-      service: appointment.service,
-      date: appointment.date,
-      time: appointment.time,
+      ...newAppointment,
+      date: format(selectInfo.start, 'yyyy-MM-dd'),
+      time: format(selectInfo.start, 'HH:mm'),
     });
-    setIsEditMode(true);
     setIsModalOpen(true);
+  };
+
+  const handleEventClick = (clickInfo: any) => {
+    const event = clickInfo.event;
+    const appointment = appointments?.find(apt => apt.id === event.id);
+    if (appointment) {
+      setSelectedAppointment(appointment);
+      setNewAppointment({
+        client_id: appointment.client_id,
+        service_id: appointment.service_id,
+        service: appointment.service,
+        date: appointment.date,
+        time: appointment.time,
+      });
+      setIsEditMode(true);
+      setIsModalOpen(true);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -381,6 +379,28 @@ function Dashboard() {
     }
   };
 
+  const events = appointments?.map(appointment => {
+    const startTime = `${appointment.date}T${appointment.time}`;
+    const duration = parseInt(appointment.service_details?.duration || '0');
+    const endTime = format(
+      addMinutes(parseISO(startTime), duration),
+      "yyyy-MM-dd'T'HH:mm:ss"
+    );
+
+    return {
+      id: appointment.id,
+      title: `${appointment.client?.name} - ${appointment.service_details?.name}`,
+      start: startTime,
+      end: endTime,
+      className: `status-${appointment.status}`,
+      extendedProps: {
+        client: appointment.client,
+        service: appointment.service_details,
+        status: appointment.status,
+      },
+    };
+  }) || [];
+
   if (isLoadingAppointments) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -391,26 +411,29 @@ function Dashboard() {
 
   return (
     <div className="p-6">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Agendamentos</h2>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="all">Todos</option>
-                <option value="day">Hoje</option>
-                <option value="week">Esta Semana</option>
-                <option value="month">Este Mês</option>
-              </select>
+      {/* Calendar Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Calendário de Agendamentos
+          </h2>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 dark:text-gray-400">Início:</label>
               <input
-                type="date"
-                value={format(startDate, 'yyyy-MM-dd')}
-                onChange={(e) => setStartDate(new Date(e.target.value))}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                type="time"
+                value={businessHours.start}
+                onChange={(e) => setBusinessHours({ ...businessHours, start: e.target.value })}
+                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 dark:text-gray-400">Fim:</label>
+              <input
+                type="time"
+                value={businessHours.end}
+                onChange={(e) => setBusinessHours({ ...businessHours, end: e.target.value })}
+                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white p-2"
               />
             </div>
             <button
@@ -422,104 +445,34 @@ function Dashboard() {
             </button>
           </div>
         </div>
-        <div className="divide-y divide-gray-100 dark:divide-gray-700">
-          {appointments?.map((appointment) => (
-            <div key={appointment.id} className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-shrink-0">
-                    <User className="w-10 h-10 text-gray-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-                      {appointment.client?.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {appointment.service_details?.name}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-8">
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(appointment.date).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Clock className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {appointment.time} - {calculateEndTime(appointment.time, appointment.service_details?.duration || '0')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleEdit(appointment)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(appointment.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-full"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={() => handleSendMessage(appointment.id, 'confirmation')}
-                  disabled={appointment.messages_sent?.confirmation}
-                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
-                    appointment.messages_sent?.confirmation
-                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
-                      : 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50'
-                  }`}
-                >
-                  <Send className="w-4 h-4" />
-                  {appointment.messages_sent?.confirmation ? 'Enviado' : 'Confirmação'}
-                </button>
-                <button
-                  onClick={() => handleSendMessage(appointment.id, 'reminder_24h')}
-                  disabled={appointment.messages_sent?.reminder_24h}
-                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
-                    appointment.messages_sent?.reminder_24h
-                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
-                      : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
-                  }`}
-                >
-                  <Send className="w-4 h-4" />
-                  {appointment.messages_sent?.reminder_24h ? 'Enviado' : 'Lembrete (24h)'}
-                </button>
-                <button
-                  onClick={() => handleSendMessage(appointment.id, 'reminder_1h')}
-                  disabled={appointment.messages_sent?.reminder_1h}
-                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
-                    appointment.messages_sent?.reminder_1h
-                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
-                      : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
-                  }`}
-                >
-                  <Send className="w-4 h-4" />
-                  {appointment.messages_sent?.reminder_1h ? 'Enviado' : 'Lembrete (1h)'}
-                </button>
-                <button
-                  onClick={() => handleSendMessage(appointment.id, 'cancellation')}
-                  disabled={appointment.messages_sent?.cancellation}
-                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
-                    appointment.messages_sent?.cancellation
-                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
-                      : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50'
-                  }`}
-                >
-                  <Send className="w-4 h-4" />
-                  {appointment.messages_sent?.cancellation ? 'Enviado' : 'Cancelamento'}
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="h-[600px]">
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            initialView="timeGridWeek"
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay',
+            }}
+            events={events}
+            slotMinTime={businessHours.start}
+            slotMaxTime={businessHours.end}
+            locale="pt-br"
+            allDaySlot={false}
+            editable={false}
+            selectable={true}
+            selectMirror={true}
+            dayMaxEvents={true}
+            select={handleDateSelect}
+            eventClick={handleEventClick}
+            slotDuration="00:30:00"
+            snapDuration="00:15:00"
+            businessHours={{
+              daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+              startTime: businessHours.start,
+              endTime: businessHours.end,
+            }}
+          />
         </div>
       </div>
 
@@ -574,7 +527,7 @@ function Dashboard() {
                     <option value="">Selecione um serviço</option>
                     {services?.map((service) => (
                       <option key={service.id} value={service.id}>
-                        {service.name} - {service.duration}
+                        {service.name} - {service.duration} minutos
                       </option>
                     ))}
                   </select>
@@ -615,7 +568,13 @@ function Dashboard() {
                     />
                     {newAppointment.service_id && newAppointment.time && (
                       <div className="mt-1 p-2 bg-gray-100 dark:bg-gray-700 rounded-md text-gray-500 dark:text-gray-400">
-                        até {calculateEndTime(newAppointment.time, services?.find(s => s.id === newAppointment.service_id)?.duration || '0')}
+                        até {format(
+                          addMinutes(
+                            parseISO(`${newAppointment.date}T${newAppointment.time}`),
+                            parseInt(services?.find(s => s.id === newAppointment.service_id)?.duration || '0')
+                          ),
+                          'HH:mm'
+                        )}
                       </div>
                     )}
                   </div>
@@ -671,14 +630,45 @@ function Dashboard() {
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                disabled={deleteAppointmentMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
               >
+                {deleteAppointmentMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
                 Confirmar
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        .status-pending { background-color: #FEF3C7; border-color: #F59E0B; }
+        .status-confirmed { background-color: #D1FAE5; border-color: #10B981; }
+        .status-cancelled { background-color: #FEE2E2; border-color: #EF4444; }
+
+        .dark .status-pending { background-color: #78350F; border-color: #F59E0B; }
+        .dark .status-confirmed { background-color: #064E3B; border-color: #10B981; }
+        .dark .status-cancelled { background-color: #7F1D1D; border-color: #EF4444; }
+
+        .fc { height: 100%; }
+        .fc-theme-standard td { border: 1px solid #E5E7EB; }
+        .dark .fc-theme-standard td { border-color: #374151; }
+        .fc-theme-standard th { border: 1px solid #E5E7EB; background: #F3F4F6; }
+        .dark .fc-theme-standard th { border-color: #374151; background: #1F2937; }
+        .fc-theme-standard .fc-scrollgrid { border: 1px solid #E5E7EB; }
+        .dark .fc-theme-standard .fc-scrollgrid { border-color: #374151; }
+        .fc-theme-standard td.fc-today { background: #EFF6FF; }
+        .dark .fc-theme-standard td.fc-today { background: #1E3A8A; }
+        .fc-day-today { background: #EFF6FF !important; }
+        .dark .fc-day-today { background: #1E3A8A !important; }
+        .fc-button { background: #F3F4F6 !important; border: 1px solid #E5E7EB !important; color: #374151 !important; }
+        .dark .fc-button { background: #374151 !important; border-color: #4B5563 !important; color: #F3F4F6 !important; }
+        .fc-button-active { background: #2563EB !important; color: white !important; }
+        .dark .fc-button-active { background: #1D4ED8 !important; }
+        .fc-timegrid-slot { height: 48px !important; }
+      `}</style>
     </div>
   );
 }
