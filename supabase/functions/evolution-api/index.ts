@@ -29,7 +29,7 @@ async function checkInstanceStatus(instanceName: string) {
     }
 
     const data = await response.json();
-    return data.state === 'open' ? 'connected' : 'disconnected';
+    return data.instance?.state === 'open' ? 'connected' : 'disconnected';
   } catch (error) {
     console.error('Error checking instance status:', error);
     throw error;
@@ -49,7 +49,7 @@ async function refreshQrCode(instanceName: string) {
     }
 
     const data = await response.json();
-    return data.base64;
+    return data.qrcode?.base64 || null;
   } catch (error) {
     console.error('Error refreshing QR code:', error);
     return null;
