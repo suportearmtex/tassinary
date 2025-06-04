@@ -22,7 +22,7 @@ const variablesList = [
 
 function WhatsApp() {
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: instance, isLoading: isLoadingInstance, error: instanceError, refetch } = useQuery({
@@ -120,11 +120,11 @@ function WhatsApp() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
-      setIsDeleting(false);
+      setIsDeleteModalOpen(false);
       toast.success('Instância excluída com sucesso!');
     },
     onError: () => {
-      setIsDeleting(false);
+      setIsDeleteModalOpen(false);
       toast.error('Erro ao excluir instância');
     },
   });
@@ -179,10 +179,7 @@ function WhatsApp() {
   };
 
   const handleDeleteInstance = () => {
-    if (window.confirm('Tem certeza que deseja excluir esta instância do WhatsApp?')) {
-      setIsDeleting(true);
-      deleteInstanceMutation.mutate();
-    }
+    deleteInstanceMutation.mutate();
   };
 
   const handleSaveTemplate = async (e: React.FormEvent) => {
@@ -239,9 +236,8 @@ function WhatsApp() {
                     Atualizar QR
                   </button>
                   <button
-                    onClick={handleDeleteInstance}
-                    disabled={isDeleting}
-                    className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    onClick={() => setIsDeleteModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                     Excluir Instância
@@ -380,6 +376,38 @@ function WhatsApp() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Confirmar Exclusão
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Tem certeza que deseja excluir esta instância do WhatsApp? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteInstance}
+                disabled={deleteInstanceMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteInstanceMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
