@@ -29,6 +29,9 @@ function Dashboard() {
   const { data: appointments, isLoading: isLoadingAppointments } = useQuery({
     queryKey: ['appointments'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -88,6 +91,9 @@ function Dashboard() {
 
   const createAppointmentMutation = useMutation({
     mutationFn: async (appointmentData: typeof newAppointment) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       const selectedService = services?.find(s => s.id === appointmentData.service_id);
       if (!selectedService) {
         throw new Error('Serviço não encontrado');
@@ -120,7 +126,11 @@ function Dashboard() {
 
       const { data, error } = await supabase
         .from('appointments')
-        .insert([{ ...appointmentData, status: 'pending' }])
+        .insert([{ 
+          ...appointmentData, 
+          status: 'pending',
+          user_id: user.id // Add user_id to satisfy RLS policy
+        }])
         .select()
         .single();
 
