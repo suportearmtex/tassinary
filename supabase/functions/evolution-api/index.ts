@@ -10,7 +10,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
 };
 
 async function checkInstanceStatus(instanceName: string) {
@@ -46,7 +46,7 @@ async function refreshQrCode(instanceName: string) {
     }
 
     const data = await response.json();
-    return data.base64; // Updated to use base64 field
+    return data.base64;
   } catch (error) {
     console.error('Error refreshing QR code:', error);
     return null;
@@ -66,7 +66,7 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
       body: JSON.stringify({
         instanceName,
         qrcode: true,
-        number: '5511999999999',
+        integration: 'WHATSAPP-BAILEYS',
         token: evolutionApiKey,
       }),
     });
@@ -100,6 +100,26 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
   }
 }
 
+async function deleteEvolutionInstance(instanceName: string) {
+  try {
+    const response = await fetch(`${evolutionApiUrl}/instance/delete/${instanceName}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': evolutionApiKey,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete Evolution instance');
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting Evolution instance:', error);
+    throw error;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -119,6 +139,37 @@ Deno.serve(async (req) => {
 
     if (authError || !user) {
       throw new Error('Invalid authorization');
+    }
+
+    // Handle DELETE request
+    if (req.method === 'DELETE') {
+      const { data: existingInstance } = await supabase
+        .from('evolution_instances')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!existingInstance) {
+        throw new Error('No instance found');
+      }
+
+      await deleteEvolutionInstance(existingInstance.instance_name);
+
+      const { error: deleteError } = await supabase
+        .from('evolution_instances')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (deleteError) {
+        throw new Error('Failed to delete instance record');
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     const { data: existingInstance } = await supabase
