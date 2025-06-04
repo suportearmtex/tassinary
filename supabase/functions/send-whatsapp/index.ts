@@ -23,12 +23,7 @@ async function sendWhatsAppMessage(instanceName: string, phone: string, message:
       },
       body: JSON.stringify({
         number: phone,
-        options: {
-          delay: 1200,
-        },
-        textMessage: {
-          text: message,
-        },
+        text: message
       }),
     });
 
