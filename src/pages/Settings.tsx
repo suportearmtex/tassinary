@@ -66,7 +66,7 @@ function Settings() {
     }
 
     // URL com API key
-    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/handle_google_oauth?apikey=${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
+    const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-oauth-callback`;
     const scope = encodeURIComponent('https://www.googleapis.com/auth/calendar');
     const state = session.access_token;
 
