@@ -29,7 +29,7 @@ async function checkInstanceStatus(instanceName: string) {
     }
 
     const data = await response.json();
-    return data.state || 'disconnected';
+    return data.state === 'open' ? 'connected' : 'disconnected';
   } catch (error) {
     console.error('Error checking instance status:', error);
     throw error;
