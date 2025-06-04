@@ -26,24 +26,31 @@ function WhatsApp() {
   const [isConfigureModalOpen, setIsConfigureModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: instance, isLoading: isLoadingInstance } = useQuery({
+  const { data: instance, isLoading: isLoadingInstance, error: instanceError } = useQuery({
     queryKey: ['evolution-instance'],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('No session');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('No session');
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch Evolution instance');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch Evolution instance');
+        }
+
+        return response.json() as Promise<EvolutionInstance>;
+      } catch (error) {
+        console.error('Error fetching Evolution instance:', error);
+        throw error;
       }
-
-      return response.json() as Promise<EvolutionInstance>;
     },
+    retry: 1,
   });
 
   const createInstanceMutation = useMutation({
@@ -61,7 +68,8 @@ function WhatsApp() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create instance');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create instance');
       }
 
       return response.json();
@@ -71,8 +79,9 @@ function WhatsApp() {
       setIsConfigureModalOpen(false);
       toast.success('Instância WhatsApp criada com sucesso!');
     },
-    onError: () => {
-      toast.error('Erro ao criar instância WhatsApp');
+    onError: (error: Error) => {
+      console.error('Create instance error:', error);
+      toast.error(`Erro ao criar instância WhatsApp: ${error.message}`);
     },
   });
 
@@ -91,7 +100,8 @@ function WhatsApp() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to refresh QR code');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to refresh QR code');
       }
 
       return response.json();
@@ -100,8 +110,9 @@ function WhatsApp() {
       queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
       toast.success('QR Code atualizado com sucesso!');
     },
-    onError: () => {
-      toast.error('Erro ao atualizar QR Code');
+    onError: (error: Error) => {
+      console.error('Refresh QR code error:', error);
+      toast.error(`Erro ao atualizar QR Code: ${error.message}`);
     },
   });
 
@@ -177,6 +188,10 @@ function WhatsApp() {
     }
   };
 
+  if (instanceError) {
+    console.error('Instance error:', instanceError);
+  }
+
   return (
     <div className="p-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -201,7 +216,7 @@ function WhatsApp() {
                   Configurar WhatsApp
                 </button>
               )}
-              {instance && !instance.status.includes('connected') && (
+              {instance && !instance.status?.includes('connected') && (
                 <button
                   onClick={() => setShowQrCode(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -225,7 +240,7 @@ function WhatsApp() {
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
             {isLoadingInstance || refreshQrCodeMutation.isPending ? (
               <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
-            ) : instance?.qr_code && showQrCode && !instance.status.includes('connected') ? (
+            ) : instance?.qr_code && showQrCode && !instance.status?.includes('connected') ? (
               <img
                 src={instance.qr_code}
                 alt="WhatsApp QR Code"
@@ -239,7 +254,7 @@ function WhatsApp() {
                 ? 'Carregando...'
                 : !instance
                 ? 'Configure o WhatsApp para começar'
-                : instance.status.includes('connected')
+                : instance.status?.includes('connected')
                 ? 'WhatsApp conectado'
                 : showQrCode
                 ? 'Escaneie o código QR com seu WhatsApp para conectar'
