@@ -22,6 +22,7 @@ const variablesList = [
 
 function WhatsApp() {
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
+  const [showQrCode, setShowQrCode] = useState(false);
   const [isConfigureModalOpen, setIsConfigureModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -50,7 +51,6 @@ function WhatsApp() {
         throw error;
       }
     },
-    refetchInterval: (data) => data?.status === 'connected' ? false : 15000,
     retry: 1,
   });
 
@@ -257,6 +257,15 @@ function WhatsApp() {
               )}
               {instance && !instance.status?.includes('connected') && (
                 <button
+                  onClick={() => setShowQrCode(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <QrCode className="w-4 h-4" />
+                  Exibir QR Code
+                </button>
+              )}
+              {instance && showQrCode && (
+                <button
                   onClick={handleRefreshQrCode}
                   disabled={isLoadingInstance || refreshQrCodeMutation.isPending}
                   className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
@@ -280,7 +289,7 @@ function WhatsApp() {
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
             {isLoadingInstance || refreshQrCodeMutation.isPending ? (
               <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
-            ) : instance?.qr_code && !instance.status?.includes('connected') ? (
+            ) : instance?.qr_code && showQrCode && !instance.status?.includes('connected') ? (
               <img
                 src={instance.qr_code}
                 alt="WhatsApp QR Code"
@@ -296,7 +305,9 @@ function WhatsApp() {
                 ? 'Configure o WhatsApp para começar'
                 : instance.status?.includes('connected')
                 ? 'WhatsApp conectado'
-                : 'Escaneie o código QR com seu WhatsApp para conectar'}
+                : showQrCode
+                ? 'Escaneie o código QR com seu WhatsApp para conectar'
+                : 'Clique em "Exibir QR Code" para conectar'}
             </p>
           </div>
           {instance && (
