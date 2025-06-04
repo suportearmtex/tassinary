@@ -38,12 +38,22 @@ function WhatsApp() {
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
         throw new Error('Failed to fetch Evolution instance');
       }
 
       return response.json() as Promise<EvolutionInstance>;
     },
-    refetchInterval: 5000,
+    refetchInterval: (data) => {
+      // If instance exists and is not connected, check more frequently
+      if (data && data.status !== 'connected') {
+        return 5000; // Check every 5 seconds
+      }
+      // If instance is connected or doesn't exist, check less frequently
+      return 30000; // Check every 30 seconds
+    },
   });
 
   const createInstanceMutation = useMutation({
@@ -166,9 +176,17 @@ function WhatsApp() {
 
   useEffect(() => {
     if (instanceError) {
-      toast.error('Erro ao carregar instância do WhatsApp');
+      if (instanceError instanceof Error && instanceError.message === 'Instance not found') {
+        // If instance not found in Evolution API but exists in our database,
+        // clean up the database record
+        if (instance) {
+          deleteInstanceMutation.mutate();
+        }
+      } else {
+        toast.error('Erro ao carregar instância do WhatsApp');
+      }
     }
-  }, [instanceError]);
+  }, [instanceError, instance]);
 
   const handleCreateInstance = () => {
     createInstanceMutation.mutate();
