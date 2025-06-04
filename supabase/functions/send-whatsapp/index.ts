@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     }
 
     const stateData = await stateResponse.json();
-    if (stateData.state !== 'open') {
+    if (!stateData.instance?.state || stateData.instance.state !== 'open') {
       throw new Error('WhatsApp is not connected');
     }
 
