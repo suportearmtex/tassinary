@@ -45,12 +45,18 @@ function WhatsApp() {
           throw new Error(errorData.error || 'Failed to fetch Evolution instance');
         }
 
-        return response.json() as Promise<EvolutionInstance>;
+        const data = await response.json();
+        // Automatically show QR code if instance exists but is not connected
+        if (data && !data.status?.includes('connected')) {
+          setShowQrCode(true);
+        }
+        return data;
       } catch (error) {
         console.error('Error fetching Evolution instance:', error);
         throw error;
       }
     },
+    refetchInterval: 5000, // Poll every 5 seconds to check connection status
     retry: 1,
   });
 
@@ -78,6 +84,7 @@ function WhatsApp() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
       setIsConfigureModalOpen(false);
+      setShowQrCode(true); // Automatically show QR code after creation
       toast.success('Instância WhatsApp criada com sucesso!');
     },
     onError: (error: Error) => {
@@ -108,6 +115,7 @@ function WhatsApp() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
       setIsDeleteModalOpen(false);
+      setShowQrCode(false);
       toast.success('Instância WhatsApp excluída com sucesso!');
     },
     onError: (error: Error) => {
@@ -289,7 +297,7 @@ function WhatsApp() {
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
             {isLoadingInstance || refreshQrCodeMutation.isPending ? (
               <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
-            ) : instance?.qr_code && showQrCode && !instance.status?.includes('connected') ? (
+            ) : instance?.qr_code && showQrCode ? (
               <img
                 src={instance.qr_code}
                 alt="WhatsApp QR Code"
