@@ -23,6 +23,7 @@ const variablesList = [
 function WhatsApp() {
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: instance, isLoading: isLoadingInstance, error: instanceError, refetch } = useQuery({
@@ -47,12 +48,10 @@ function WhatsApp() {
       return response.json() as Promise<EvolutionInstance>;
     },
     refetchInterval: (data) => {
-      // If instance exists and is not connected, check more frequently
       if (data && data.status !== 'connected') {
-        return 5000; // Check every 5 seconds
+        return 5000;
       }
-      // If instance is connected or doesn't exist, check less frequently
-      return 30000; // Check every 30 seconds
+      return 30000;
     },
   });
 
@@ -76,10 +75,11 @@ function WhatsApp() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
-      toast.success('Instância criada com sucesso!');
+      setIsCreateModalOpen(false);
+      toast.success('Configuração criada com sucesso!');
     },
     onError: () => {
-      toast.error('Erro ao criar instância');
+      toast.error('Erro ao criar configuração');
     },
   });
 
@@ -131,11 +131,11 @@ function WhatsApp() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
       setIsDeleteModalOpen(false);
-      toast.success('Instância excluída com sucesso!');
+      toast.success('Configuração excluída com sucesso!');
     },
     onError: () => {
       setIsDeleteModalOpen(false);
-      toast.error('Erro ao excluir instância');
+      toast.error('Erro ao excluir configuração');
     },
   });
 
@@ -177,13 +177,11 @@ function WhatsApp() {
   useEffect(() => {
     if (instanceError) {
       if (instanceError instanceof Error && instanceError.message === 'Instance not found') {
-        // If instance not found in Evolution API but exists in our database,
-        // clean up the database record
         if (instance) {
           deleteInstanceMutation.mutate();
         }
       } else {
-        toast.error('Erro ao carregar instância do WhatsApp');
+        toast.error('Erro ao carregar configuração do WhatsApp');
       }
     }
   }, [instanceError, instance]);
@@ -240,7 +238,7 @@ function WhatsApp() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Conexão WhatsApp
+              Configuração WhatsApp
             </h2>
             <div className="flex items-center gap-2">
               {instance ? (
@@ -258,17 +256,17 @@ function WhatsApp() {
                     className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
-                    Excluir Instância
+                    Excluir Configuração
                   </button>
                 </>
               ) : (
                 <button
-                  onClick={handleCreateInstance}
+                  onClick={() => setIsCreateModalOpen(true)}
                   disabled={createInstanceMutation.isPending}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
                 >
                   <Plus className="w-4 h-4" />
-                  Criar Instância
+                  Criar Configuração
                 </button>
               )}
             </div>
@@ -289,7 +287,7 @@ function WhatsApp() {
               {isLoadingInstance || refreshQrCodeMutation.isPending
                 ? 'Carregando QR Code...'
                 : !instance
-                ? 'Clique em "Criar Instância" para começar'
+                ? 'Clique em "Criar Configuração" para começar'
                 : instance?.qr_code && instance.status !== 'connected'
                 ? 'Escaneie o código QR com seu WhatsApp para conectar'
                 : instance?.status === 'connected'
@@ -395,6 +393,38 @@ function WhatsApp() {
         </div>
       </div>
 
+      {/* Create Configuration Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+              Criar Nova Configuração
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Você está prestes a criar uma nova configuração do WhatsApp. Depois de criar, você poderá conectar seu dispositivo escaneando o QR Code.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateInstance}
+                disabled={createInstanceMutation.isPending}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {createInstanceMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Criar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -403,7 +433,7 @@ function WhatsApp() {
               Confirmar Exclusão
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Tem certeza que deseja excluir esta instância do WhatsApp? Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir esta configuração do WhatsApp? Esta ação não pode ser desfeita.
             </p>
             <div className="flex justify-end gap-3">
               <button
