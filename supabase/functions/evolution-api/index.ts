@@ -52,7 +52,7 @@ async function refreshQrCode(instanceName: string) {
 
     const data = await response.json();
     console.log('QR code refreshed successfully');
-    return data.base64;
+    return data.qrcode?.base64 || data.base64;
   } catch (error) {
     console.error('Error refreshing QR code:', error);
     return null;
@@ -98,8 +98,11 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
         instanceName,
         qrcode: true,
         integration: "WHATSAPP-BAILEYS",
+        webhook: null,
+        events: ["messages", "status"],
         reject_call: true,
         groups_ignore: true,
+        permanent: true,
       }),
     });
 
@@ -111,7 +114,23 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
     }
 
     console.log('Instance created successfully');
-    const qrCode = await refreshQrCode(instanceName);
+    
+    // Get initial QR code
+    const connectResponse = await fetch(`${evolutionApiUrl}/instance/connect/${instanceName}`, {
+      headers: {
+        'apikey': evolutionApiKey,
+      },
+    });
+
+    if (!connectResponse.ok) {
+      console.error(`Initial connection failed with status: ${connectResponse.status}`);
+      throw new Error('Failed to get initial QR code');
+    }
+
+    const connectData = await connectResponse.json();
+    const qrCode = connectData.qrcode?.base64 || connectData.base64;
+
+    console.log('Initial QR code generated');
 
     const { error: insertError } = await supabase
       .from('evolution_instances')
