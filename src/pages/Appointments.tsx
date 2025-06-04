@@ -226,7 +226,7 @@ function Appointments() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ id, type }: { id: string; type: 'confirmation' | 'reminder' | 'cancellation' }) => {
+    mutationFn: async ({ id, type }: { id: string; type: 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'cancellation' }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
 
@@ -251,7 +251,10 @@ function Appointments() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
-      toast.success(`Mensagem de ${data.type === 'confirmation' ? 'confirmação' : data.type === 'reminder' ? 'lembrete' : 'cancelamento'} enviada com sucesso!`);
+      const messageType = data.type === 'confirmation' ? 'confirmação' : 
+                         data.type === 'reminder_24h' ? 'lembrete (24h)' :
+                         data.type === 'reminder_1h' ? 'lembrete (1h)' : 'cancelamento';
+      toast.success(`Mensagem de ${messageType} enviada com sucesso!`);
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -294,7 +297,7 @@ function Appointments() {
     }
   };
 
-  const handleSendMessage = async (id: string, type: 'confirmation' | 'reminder' | 'cancellation') => {
+  const handleSendMessage = async (id: string, type: 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'cancellation') => {
     const appointment = appointments?.find(apt => apt.id === id);
     if (!appointment?.messages_sent?.[type]) {
       await sendMessageMutation.mutateAsync({ id, type });
@@ -404,16 +407,28 @@ function Appointments() {
                   {appointment.messages_sent?.confirmation ? 'Enviado' : 'Confirmação'}
                 </button>
                 <button
-                  onClick={() => handleSendMessage(appointment.id, 'reminder')}
-                  disabled={appointment.messages_sent?.reminder}
+                  onClick={() => handleSendMessage(appointment.id, 'reminder_24h')}
+                  disabled={appointment.messages_sent?.reminder_24h}
                   className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
-                    appointment.messages_sent?.reminder
+                    appointment.messages_sent?.reminder_24h
                       ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
                       : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
                   }`}
                 >
                   <Send className="w-4 h-4" />
-                  {appointment.messages_sent?.reminder ? 'Enviado' : 'Lembrete'}
+                  {appointment.messages_sent?.reminder_24h ? 'Enviado' : 'Lembrete (24h)'}
+                </button>
+                <button
+                  onClick={() => handleSendMessage(appointment.id, 'reminder_1h')}
+                  disabled={appointment.messages_sent?.reminder_1h}
+                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
+                    appointment.messages_sent?.reminder_1h
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
+                      : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  {appointment.messages_sent?.reminder_1h ? 'Enviado' : 'Lembrete (1h)'}
                 </button>
                 <button
                   onClick={() => handleSendMessage(appointment.id, 'cancellation')}
