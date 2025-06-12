@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Plus, Loader2, Edit2, Trash2 } from 'lucide-react';
+import { Clock, Plus, Loader2, Edit2, Trash2, DollarSign } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Service } from '../lib/types';
@@ -15,6 +15,7 @@ function Services() {
   const [newService, setNewService] = useState({
     name: '',
     duration: '60',
+    price: '0.00',
   });
 
   const user = useAuthStore((state) => state.user);
@@ -49,7 +50,7 @@ function Services() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services', user?.id] });
       setIsModalOpen(false);
-      setNewService({ name: '', duration: '60' });
+      setNewService({ name: '', duration: '60', price: '0.00' });
       toast.success('Serviço criado com sucesso!');
     },
     onError: () => {
@@ -106,6 +107,7 @@ function Services() {
     setNewService({
       name: service.name,
       duration: service.duration.toString(),
+      price: service.price.toString(),
     });
     setIsEditMode(true);
     setIsModalOpen(true);
@@ -129,11 +131,13 @@ function Services() {
         id: selectedService.id,
         name: newService.name,
         duration: parseInt(newService.duration),
+        price: parseFloat(newService.price),
       });
     } else {
       await createServiceMutation.mutateAsync({
         name: newService.name,
         duration: parseInt(newService.duration),
+        price: parseFloat(newService.price),
       });
     }
   };
@@ -156,7 +160,7 @@ function Services() {
               onClick={() => {
                 setIsEditMode(false);
                 setSelectedService(null);
-                setNewService({ name: '', duration: '60' });
+                setNewService({ name: '', duration: '60', price: '0.00' });
                 setIsModalOpen(true);
               }}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -177,6 +181,9 @@ function Services() {
                   Duração
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Preço
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Ações
                 </th>
               </tr>
@@ -194,6 +201,14 @@ function Services() {
                       <Clock className="w-4 h-4 text-gray-400" />
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         {service.duration} minutos
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <DollarSign className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        R$ {service.price?.toFixed(2) || '0.00'}
                       </span>
                     </div>
                   </td>
@@ -254,6 +269,22 @@ function Services() {
                     value={newService.duration}
                     onChange={(e) =>
                       setNewService({ ...newService, duration: e.target.value })
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Preço (R$)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={newService.price}
+                    onChange={(e) =>
+                      setNewService({ ...newService, price: e.target.value })
                     }
                     className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />

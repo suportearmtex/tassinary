@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2 } from 'lucide-react';
+import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2, Search, DollarSign } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Appointment, Client, Service } from '../lib/types';
@@ -15,12 +15,14 @@ function Appointments() {
   const [dateFilter, setDateFilter] = useState('all');
   const [startDate, setStartDate] = useState(new Date());
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [clientFilter, setClientFilter] = useState('');
   const [newAppointment, setNewAppointment] = useState({
     client_id: '',
     service_id: '',
     service: '',
     date: '',
     time: '',
+    price: '0.00',
   });
 
   const user = useAuthStore((state) => state.user);
@@ -97,6 +99,11 @@ function Appointments() {
     enabled: !!user?.id,
   });
 
+  // Filter clients based on search
+  const filteredClients = clients?.filter(client =>
+    client.name.toLowerCase().includes(clientFilter.toLowerCase())
+  ) || [];
+
   const createAppointmentMutation = useMutation({
     mutationFn: async (appointmentData: typeof newAppointment) => {
       const selectedService = services?.find(s => s.id === appointmentData.service_id);
@@ -132,7 +139,12 @@ function Appointments() {
 
       const { data, error } = await supabase
         .from('appointments')
-        .insert([{ ...appointmentData, user_id: user?.id, status: 'pending' }])
+        .insert([{ 
+          ...appointmentData, 
+          user_id: user?.id, 
+          status: 'pending',
+          price: parseFloat(appointmentData.price)
+        }])
         .select()
         .single();
 
@@ -142,7 +154,7 @@ function Appointments() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
       setIsModalOpen(false);
-      setNewAppointment({ client_id: '', service_id: '', service: '', date: '', time: '' });
+      setNewAppointment({ client_id: '', service_id: '', service: '', date: '', time: '', price: '0.00' });
       toast.success('Agendamento criado com sucesso!');
     },
     onError: (error: Error) => {
@@ -183,9 +195,14 @@ function Appointments() {
         throw new Error('Já existe um agendamento neste horário');
       }
 
+      const updateData = {
+        ...appointment,
+        price: typeof appointment.price === 'string' ? parseFloat(appointment.price) : appointment.price
+      };
+
       const { data, error } = await supabase
         .from('appointments')
-        .update(appointment)
+        .update(updateData)
         .eq('id', appointment.id)
         .select()
         .single();
@@ -269,6 +286,7 @@ function Appointments() {
       service: appointment.service,
       date: appointment.date,
       time: appointment.time,
+      price: appointment.price?.toString() || '0.00',
     });
     setIsEditMode(true);
     setIsModalOpen(true);
@@ -304,6 +322,16 @@ function Appointments() {
     } else {
       toast.error('Esta mensagem já foi enviada anteriormente');
     }
+  };
+
+  const handleServiceChange = (serviceId: string) => {
+    const selectedService = services?.find(s => s.id === serviceId);
+    setNewAppointment({
+      ...newAppointment,
+      service_id: serviceId,
+      service: selectedService?.name || '',
+      price: selectedService?.price?.toString() || '0.00',
+    });
   };
 
   if (isLoadingAppointments) {
@@ -362,6 +390,12 @@ function Appointments() {
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {appointment.service_details?.name}
                     </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <DollarSign className="w-3 h-3 text-gray-400" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        R$ {appointment.price?.toFixed(2) || '0.00'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-8">
@@ -461,6 +495,18 @@ function Appointments() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Cliente
                   </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Buscar cliente..."
+                      value={clientFilter}
+                      onChange={(e) => setClientFilter(e.target.value)}
+                      className="mt-1 pl-10 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
                   <select
                     required
                     value={newAppointment.client_id}
@@ -470,10 +516,10 @@ function Appointments() {
                         client_id: e.target.value,
                       })
                     }
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="mt-2 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">Selecione um cliente</option>
-                    {clients?.map((client) => (
+                    {filteredClients?.map((client) => (
                       <option key={client.id} value={client.id}>
                         {client.name}
                       </option>
@@ -487,22 +533,35 @@ function Appointments() {
                   <select
                     required
                     value={newAppointment.service_id}
-                    onChange={(e) =>
-                      setNewAppointment({
-                        ...newAppointment,
-                        service_id: e.target.value,
-                        service: services?.find(s => s.id === e.target.value)?.name || '',
-                      })
-                    }
+                    onChange={(e) => handleServiceChange(e.target.value)}
                     className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">Selecione um serviço</option>
                     {services?.map((service) => (
                       <option key={service.id} value={service.id}>
-                        {service.name} - {service.duration}
+                        {service.name} - {service.duration}min - R$ {service.price?.toFixed(2) || '0.00'}
                       </option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Preço (R$)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={newAppointment.price}
+                    onChange={(e) =>
+                      setNewAppointment({
+                        ...newAppointment,
+                        price: e.target.value,
+                      })
+                    }
+                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -553,6 +612,7 @@ function Appointments() {
                     setIsModalOpen(false);
                     setIsEditMode(false);
                     setSelectedAppointment(null);
+                    setClientFilter('');
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >

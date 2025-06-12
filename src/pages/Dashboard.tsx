@@ -6,7 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Appointment, Client, Service } from '../lib/types';
-import { Calendar as CalendarIcon, Clock, User, Plus, Loader2, Send, Trash2, Edit2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, Loader2, Send, Trash2, Edit2, Search, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format, addMinutes, parseISO, isWithinInterval } from 'date-fns';
 import { useAuthStore } from '../store/authStore';
@@ -21,12 +21,14 @@ function Dashboard() {
     end: '20:00',
   });
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [clientFilter, setClientFilter] = useState('');
   const [newAppointment, setNewAppointment] = useState({
     client_id: '',
     service_id: '',
     service: '',
     date: '',
     time: '',
+    price: '0.00',
   });
 
   const user = useAuthStore((state) => state.user);
@@ -112,6 +114,11 @@ function Dashboard() {
     enabled: !!user?.id,
   });
 
+  // Filter clients based on search
+  const filteredClients = clients?.filter(client =>
+    client.name.toLowerCase().includes(clientFilter.toLowerCase())
+  ) || [];
+
   const createAppointmentMutation = useMutation({
     mutationFn: async (appointmentData: typeof newAppointment) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -152,7 +159,8 @@ function Dashboard() {
         .insert([{ 
           ...appointmentData, 
           status: 'pending',
-          user_id: user.id 
+          user_id: user.id,
+          price: parseFloat(appointmentData.price)
         }])
         .select(`
           *,
@@ -176,7 +184,7 @@ function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
       setIsModalOpen(false);
-      setNewAppointment({ client_id: '', service_id: '', service: '', date: '', time: '' });
+      setNewAppointment({ client_id: '', service_id: '', service: '', date: '', time: '', price: '0.00' });
       toast.success('Agendamento criado com sucesso!');
     },
     onError: (error: Error) => {
@@ -217,9 +225,14 @@ function Dashboard() {
         throw new Error('Já existe um agendamento neste horário');
       }
 
+      const updateData = {
+        ...appointment,
+        price: typeof appointment.price === 'string' ? parseFloat(appointment.price) : appointment.price
+      };
+
       const { data, error } = await supabase
         .from('appointments')
-        .update(appointment)
+        .update(updateData)
         .eq('id', appointment.id)
         .select(`
           *,
@@ -341,6 +354,7 @@ function Dashboard() {
         service: appointment.service,
         date: appointment.date,
         time: appointment.time,
+        price: appointment.price?.toString() || '0.00',
       });
       setIsEditMode(true);
       setIsModalOpen(true);
@@ -379,6 +393,16 @@ function Dashboard() {
     }
   };
 
+  const handleServiceChange = (serviceId: string) => {
+    const selectedService = services?.find(s => s.id === serviceId);
+    setNewAppointment({
+      ...newAppointment,
+      service_id: serviceId,
+      service: selectedService?.name || '',
+      price: selectedService?.price?.toString() || '0.00',
+    });
+  };
+
   const events = appointments?.map(appointment => {
     const startTime = `${appointment.date}T${appointment.time}`;
     const duration = parseInt(appointment.service_details?.duration || '0');
@@ -397,6 +421,7 @@ function Dashboard() {
         client: appointment.client,
         service: appointment.service_details,
         status: appointment.status,
+        price: appointment.price,
       },
     };
   }) || [];
@@ -489,6 +514,18 @@ function Dashboard() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Cliente
                   </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Buscar cliente..."
+                      value={clientFilter}
+                      onChange={(e) => setClientFilter(e.target.value)}
+                      className="mt-1 pl-10 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
                   <select
                     required
                     value={newAppointment.client_id}
@@ -498,10 +535,10 @@ function Dashboard() {
                         client_id: e.target.value,
                       })
                     }
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="mt-2 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">Selecione um cliente</option>
-                    {clients?.map((client) => (
+                    {filteredClients?.map((client) => (
                       <option key={client.id} value={client.id}>
                         {client.name}
                       </option>
@@ -515,22 +552,35 @@ function Dashboard() {
                   <select
                     required
                     value={newAppointment.service_id}
-                    onChange={(e) =>
-                      setNewAppointment({
-                        ...newAppointment,
-                        service_id: e.target.value,
-                        service: services?.find(s => s.id === e.target.value)?.name || '',
-                      })
-                    }
+                    onChange={(e) => handleServiceChange(e.target.value)}
                     className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">Selecione um serviço</option>
                     {services?.map((service) => (
                       <option key={service.id} value={service.id}>
-                        {service.name} - {service.duration} minutos
+                        {service.name} - {service.duration}min - R$ {service.price?.toFixed(2) || '0.00'}
                       </option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Preço (R$)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={newAppointment.price}
+                    onChange={(e) =>
+                      setNewAppointment({
+                        ...newAppointment,
+                        price: e.target.value,
+                      })
+                    }
+                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -587,6 +637,7 @@ function Dashboard() {
                     setIsModalOpen(false);
                     setIsEditMode(false);
                     setSelectedAppointment(null);
+                    setClientFilter('');
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
