@@ -13,8 +13,14 @@ function Login() {
     try {
       await signIn(email, password);
       toast.success('Login realizado com sucesso!');
-    } catch (error) {
-      toast.error('Erro ao fazer login. Verifique suas credenciais.');
+    } catch (error: any) {
+      // Check if it's an invalid credentials error
+      if (error?.message?.includes('Invalid login credentials') || 
+          error?.code === 'invalid_credentials') {
+        toast.error('Credenciais inválidas. Verifique seu email e senha.');
+      } else {
+        toast.error('Erro ao fazer login. Tente novamente.');
+      }
     }
   };
 
