@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -34,6 +34,21 @@ function Dashboard() {
 
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target as Node)) {
+        setIsClientDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Função para sincronizar com o Google Calendar
   const syncWithGoogleCalendar = async (appointment: any, operation: 'create' | 'update' | 'delete') => {
@@ -528,7 +543,7 @@ function Dashboard() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Cliente
                   </label>
-                  <div className="relative">
+                  <div className="relative" ref={clientDropdownRef}>
                     <div className="relative">
                       <input
                         type="text"
