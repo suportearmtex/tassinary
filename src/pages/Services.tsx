@@ -151,10 +151,10 @@ function Services() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Serviços</h2>
             <button
               onClick={() => {
@@ -163,7 +163,7 @@ function Services() {
                 setNewService({ name: '', duration: '60', price: '0.00' });
                 setIsModalOpen(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               Novo Serviço
@@ -174,16 +174,16 @@ function Services() {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Nome
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Duração
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Preço
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Ações
                 </th>
               </tr>
@@ -191,12 +191,12 @@ function Services() {
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {services?.map((service) => (
                 <tr key={service.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                       {service.name}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
                       <Clock className="w-4 h-4 text-gray-400" />
                       <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -204,7 +204,7 @@ function Services() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
                       <DollarSign className="w-4 h-4 text-gray-400" />
                       <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -212,7 +212,7 @@ function Services() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleEdit(service)}
@@ -237,7 +237,7 @@ function Services() {
 
       {/* Form Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               {isEditMode ? 'Editar Serviço' : 'Novo Serviço'}
@@ -245,7 +245,7 @@ function Services() {
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Nome
                   </label>
                   <input
@@ -255,11 +255,11 @@ function Services() {
                     onChange={(e) =>
                       setNewService({ ...newService, name: e.target.value })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Duração (minutos)
                   </label>
                   <input
@@ -270,11 +270,11 @@ function Services() {
                     onChange={(e) =>
                       setNewService({ ...newService, duration: e.target.value })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Preço (R$)
                   </label>
                   <input
@@ -286,11 +286,11 @@ function Services() {
                     onChange={(e) =>
                       setNewService({ ...newService, price: e.target.value })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
               </div>
-              <div className="mt-6 flex justify-end space-x-3">
+              <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -298,14 +298,14 @@ function Services() {
                     setIsEditMode(false);
                     setSelectedService(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={createServiceMutation.isPending || updateServiceMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {(createServiceMutation.isPending || updateServiceMutation.isPending) && (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -320,7 +320,7 @@ function Services() {
 
       {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Confirmar Exclusão
@@ -328,20 +328,20 @@ function Services() {
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               Tem certeza que deseja excluir este serviço? Esta ação não pode ser desfeita.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
                 onClick={() => {
                   setIsDeleteModalOpen(false);
                   setServiceToDelete(null);
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmDelete}
                 disabled={deleteServiceMutation.isPending}
-                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {deleteServiceMutation.isPending && (
                   <Loader2 className="w-4 h-4 animate-spin" />

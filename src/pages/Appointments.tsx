@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2, Search, DollarSign } from 'lucide-react';
+import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2, Search, DollarSign, ChevronDown } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Appointment, Client, Service } from '../lib/types';
@@ -16,6 +16,7 @@ function Appointments() {
   const [startDate, setStartDate] = useState(new Date());
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [clientFilter, setClientFilter] = useState('');
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [newAppointment, setNewAppointment] = useState({
     client_id: '',
     service_id: '',
@@ -155,6 +156,7 @@ function Appointments() {
       queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
       setIsModalOpen(false);
       setNewAppointment({ client_id: '', service_id: '', service: '', date: '', time: '', price: '0.00' });
+      setClientFilter('');
       toast.success('Agendamento criado com sucesso!');
     },
     onError: (error: Error) => {
@@ -215,6 +217,7 @@ function Appointments() {
       setIsModalOpen(false);
       setSelectedAppointment(null);
       setIsEditMode(false);
+      setClientFilter('');
       toast.success('Agendamento atualizado com sucesso!');
     },
     onError: (error: Error) => {
@@ -288,6 +291,7 @@ function Appointments() {
       time: appointment.time,
       price: appointment.price?.toString() || '0.00',
     });
+    setClientFilter(appointment.client?.name || '');
     setIsEditMode(true);
     setIsModalOpen(true);
   };
@@ -334,6 +338,16 @@ function Appointments() {
     });
   };
 
+  const handleClientSelect = (clientId: string) => {
+    const selectedClient = clients?.find(c => c.id === clientId);
+    setNewAppointment({
+      ...newAppointment,
+      client_id: clientId,
+    });
+    setClientFilter(selectedClient?.name || '');
+    setIsClientDropdownOpen(false);
+  };
+
   if (isLoadingAppointments) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -343,32 +357,34 @@ function Appointments() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Agendamentos</h2>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="all">Todos</option>
-                <option value="day">Hoje</option>
-                <option value="week">Esta Semana</option>
-                <option value="month">Este Mês</option>
-              </select>
-              <input
-                type="date"
-                value={format(startDate, 'yyyy-MM-dd')}
-                onChange={(e) => setStartDate(new Date(e.target.value))}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-[5px] py-[5px]"
+                >
+                  <option value="all">Todos</option>
+                  <option value="day">Hoje</option>
+                  <option value="week">Esta Semana</option>
+                  <option value="month">Este Mês</option>
+                </select>
+                <input
+                  type="date"
+                  value={format(startDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setStartDate(new Date(e.target.value))}
+                  className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-[5px] py-[5px]"
+                />
+              </div>
             </div>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               Novo Agendamento
@@ -377,8 +393,8 @@ function Appointments() {
         </div>
         <div className="divide-y divide-gray-100 dark:divide-gray-700">
           {appointments?.map((appointment) => (
-            <div key={appointment.id} className="p-6">
-              <div className="flex items-center justify-between">
+            <div key={appointment.id} className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center space-x-4">
                   <div className="flex-shrink-0">
                     <User className="w-10 h-10 text-gray-400" />
@@ -398,7 +414,7 @@ function Appointments() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center space-x-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-8">
                   <div className="flex items-center space-x-2">
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -427,7 +443,7 @@ function Appointments() {
                   </div>
                 </div>
               </div>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   onClick={() => handleSendMessage(appointment.id, 'confirmation')}
                   disabled={appointment.messages_sent?.confirmation}
@@ -484,57 +500,71 @@ function Appointments() {
 
       {/* Appointment Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               {isEditMode ? 'Editar Agendamento' : 'Novo Agendamento'}
             </h3>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Cliente
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Search className="h-4 w-4 text-gray-400" />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Buscar e selecionar cliente..."
+                        value={clientFilter}
+                        onChange={(e) => {
+                          setClientFilter(e.target.value);
+                          setIsClientDropdownOpen(true);
+                          if (!e.target.value) {
+                            setNewAppointment({ ...newAppointment, client_id: '' });
+                          }
+                        }}
+                        onFocus={() => setIsClientDropdownOpen(true)}
+                        className="w-full px-[5px] py-[5px] pl-10 pr-10 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     </div>
-                    <input
-                      type="text"
-                      placeholder="Buscar cliente..."
-                      value={clientFilter}
-                      onChange={(e) => setClientFilter(e.target.value)}
-                      className="mt-1 pl-10 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    />
+                    
+                    {isClientDropdownOpen && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                        {filteredClients.length > 0 ? (
+                          filteredClients.map((client) => (
+                            <div
+                              key={client.id}
+                              onClick={() => handleClientSelect(client.id)}
+                              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-gray-900 dark:text-white"
+                            >
+                              <div className="font-medium">{client.name}</div>
+                              {client.email && (
+                                <div className="text-sm text-gray-500 dark:text-gray-400">{client.email}</div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-2 text-gray-500 dark:text-gray-400">
+                            Nenhum cliente encontrado
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <select
-                    required
-                    value={newAppointment.client_id}
-                    onChange={(e) =>
-                      setNewAppointment({
-                        ...newAppointment,
-                        client_id: e.target.value,
-                      })
-                    }
-                    className="mt-2 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="">Selecione um cliente</option>
-                    {filteredClients?.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.name}
-                      </option>
-                    ))}
-                  </select>
                 </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Serviço
                   </label>
                   <select
                     required
                     value={newAppointment.service_id}
                     onChange={(e) => handleServiceChange(e.target.value)}
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">Selecione um serviço</option>
                     {services?.map((service) => (
@@ -544,8 +574,9 @@ function Appointments() {
                     ))}
                   </select>
                 </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Preço (R$)
                   </label>
                   <input
@@ -560,11 +591,12 @@ function Appointments() {
                         price: e.target.value,
                       })
                     }
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Data
                   </label>
                   <input
@@ -577,14 +609,15 @@ function Appointments() {
                         date: e.target.value,
                       })
                     }
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Horário
                   </label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <input
                       type="time"
                       required
@@ -595,17 +628,18 @@ function Appointments() {
                           time: e.target.value,
                         })
                       }
-                      className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className="w-full sm:flex-1 px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     />
                     {newAppointment.service_id && newAppointment.time && (
-                      <div className="mt-1 p-2 bg-gray-100 dark:bg-gray-700 rounded-md text-gray-500 dark:text-gray-400">
+                      <div className="px-[5px] py-[5px] bg-gray-100 dark:bg-gray-700 rounded-md text-gray-500 dark:text-gray-400 text-sm whitespace-nowrap">
                         até {calculateEndTime(newAppointment.time, services?.find(s => s.id === newAppointment.service_id)?.duration || '0')}
                       </div>
                     )}
                   </div>
                 </div>
               </div>
-              <div className="mt-6 flex justify-end space-x-3">
+              
+              <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -613,15 +647,16 @@ function Appointments() {
                     setIsEditMode(false);
                     setSelectedAppointment(null);
                     setClientFilter('');
+                    setIsClientDropdownOpen(false);
                   }}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={createAppointmentMutation.isPending || updateAppointmentMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={createAppointmentMutation.isPending || updateAppointmentMutation.isPending || !newAppointment.client_id}
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {(createAppointmentMutation.isPending || updateAppointmentMutation.isPending) && (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -636,7 +671,7 @@ function Appointments() {
 
       {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Confirmar Exclusão
@@ -644,19 +679,19 @@ function Appointments() {
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               Tem certeza que deseja excluir este agendamento?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
                 onClick={() => {
                   setIsDeleteModalOpen(false);
                   setAppointmentToDelete(null);
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
               >
                 Confirmar
               </button>
