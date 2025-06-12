@@ -11,7 +11,7 @@ function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await signIn(email, password);
+      await signIn(email.trim(), password.trim());
       toast.success('Login realizado com sucesso!');
     } catch (error: any) {
       // Check if it's an invalid credentials error
