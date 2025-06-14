@@ -11,6 +11,7 @@ import Services from './pages/Services';
 import WhatsApp from './pages/WhatsApp';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import { useAuthStore } from './store/authStore';
 
 const queryClient = new QueryClient();
@@ -19,7 +20,16 @@ function App() {
   const user = useAuthStore((state) => state.user);
 
   if (!user) {
-    return <Login />;
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+        <Toaster position="top-right" />
+      </BrowserRouter>
+    );
   }
 
   return (
