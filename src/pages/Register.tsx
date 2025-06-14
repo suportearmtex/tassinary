@@ -16,15 +16,14 @@ function Register() {
 
   const validateUser = async (email: string) => {
     try {
-      const apiKey1 = import.meta.env.VITE_EXTERNAL_API_KEY_1;
-      const apiKey2 = import.meta.env.VITE_EXTERNAL_API_KEY_2;
-      
-      if (!apiKey1 || !apiKey2) {
-        throw new Error('Chaves de API não configuradas. Entre em contato com o administrador.');
-      }
-
       const response = await fetch(
-        `https://registration.themembers.dev.br/api/users/show-email/${email}/${apiKey1}/${apiKey2}`
+        `https://registration.themembers.dev.br/api/users/show-email/${encodeURIComponent(email)}/ac9a9355-2b9e-4ef4-a03d-5e98a2ab6b78/aaaf982d-7b29-4923-a7c1-54ee695fb14e`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
       );
       
       if (!response.ok) {
