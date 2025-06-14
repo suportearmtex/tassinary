@@ -56,12 +56,12 @@ function Register() {
       // First validate the user through the external API
       const userData = await validateUser(email.trim());
       
-      // The API returns an array with a nested user object
-      if (!userData || !Array.isArray(userData) || !userData[0] || !userData[0].user || !userData[0].user.id) {
+      // The API returns an object with a user property
+      if (!userData || !userData.user || !userData.user.id) {
         throw new Error('Usuário não encontrado ou dados inválidos');
       }
 
-      const user = userData[0].user;
+      const user = userData.user;
 
       // If validation passes, create account in Supabase
       const { supabase } = await import('../lib/supabase');
