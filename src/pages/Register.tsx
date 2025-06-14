@@ -56,9 +56,12 @@ function Register() {
       // First validate the user through the external API
       const userData = await validateUser(email.trim());
       
-      if (!userData || !userData.id) {
+      // The API returns an array with a nested user object
+      if (!userData || !Array.isArray(userData) || !userData[0] || !userData[0].user || !userData[0].user.id) {
         throw new Error('Usuário não encontrado ou dados inválidos');
       }
+
+      const user = userData[0].user;
 
       // If validation passes, create account in Supabase
       const { supabase } = await import('../lib/supabase');
@@ -67,8 +70,8 @@ function Register() {
         password: password.trim(),
         options: {
           data: {
-            full_name: userData.name || userData.full_name || email.split('@')[0],
-            external_user_id: userData.id,
+            full_name: user.name || user.full_name || email.split('@')[0],
+            external_user_id: user.id,
           }
         }
       });
