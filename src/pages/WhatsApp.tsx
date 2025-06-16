@@ -24,6 +24,7 @@ function WhatsApp() {
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [showQrCode, setShowQrCode] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: instance, isLoading: isLoadingInstance, error: instanceError, refetch } = useQuery({
@@ -45,13 +46,15 @@ function WhatsApp() {
         throw new Error('Failed to fetch Evolution instance');
       }
 
+
       return response.json() as Promise<EvolutionInstance>;
     },
     refetchInterval: (data) => {
       if (data && data.status !== 'connected') {
         return 5000;
+
       }
-      return 30000;
+      return data;
     },
   });
 
@@ -64,7 +67,9 @@ function WhatsApp() {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ type: 'create' }),
       });
 
       if (!response.ok) {
@@ -92,7 +97,9 @@ function WhatsApp() {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ type: 'refresh' }),
       });
 
       if (!response.ok) {
@@ -251,10 +258,10 @@ function WhatsApp() {
       );
     }
 
-    if (instance.qr_code) {
+    if (instance.qr_code && showQrCode && !instance.status?.includes('connected')) {
       return (
         <img
-          src={instance.qr_code}
+          src={`data:image/png;base64,${instance.qr_code}`}
           alt="WhatsApp QR Code"
           className="w-48 h-48 object-contain"
         />
