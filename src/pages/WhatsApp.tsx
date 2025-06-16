@@ -45,30 +45,14 @@ function WhatsApp() {
         throw new Error('Failed to fetch Evolution instance');
       }
 
-<<<<<<< versao6
       return response.json() as Promise<EvolutionInstance>;
     },
     refetchInterval: (data) => {
       if (data && data.status !== 'connected') {
         return 5000;
-=======
-        const data = await response.json();
-        if (data && !data.status?.includes('connected')) {
-          setShowQrCode(true);
-        }
-        return data;
-      } catch (error) {
-        console.error('Error fetching Evolution instance:', error);
-        throw error;
->>>>>>> main
       }
       return 30000;
     },
-<<<<<<< versao6
-=======
-    refetchInterval: 15000,
-    retry: 1,
->>>>>>> main
   });
 
   const createInstanceMutation = useMutation({
@@ -343,21 +327,7 @@ function WhatsApp() {
             </div>
           </div>
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-<<<<<<< versao6
             {renderQrCodeSection()}
-=======
-            {isLoadingInstance || refreshQrCodeMutation.isPending ? (
-              <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
-            ) : instance?.qr_code && showQrCode && !instance.status?.includes('connected') ? (
-              <img
-                src={`data:image/png;base64,${instance.qr_code}`}
-                alt="WhatsApp QR Code"
-                className="w-48 h-48 object-contain"
-              />
-            ) : (
-              <QrCode className="w-48 h-48 text-gray-400" />
-            )}
->>>>>>> main
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-4">
               {getQrCodeMessage()}
             </p>
