@@ -34,6 +34,9 @@ services:
           memory: 256M
 
 networks:
+  traefik_proxy:
+    external: true
+    name: traefik_proxy
   armtexai:
     external: true
     name: armtexai
