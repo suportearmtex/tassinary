@@ -15,7 +15,7 @@ services:
       - "traefik.http.routers.tassinary-app.rule=Host(`tassinary.armtexai.org`)"
       - "traefik.http.routers.tassinary-app.entrypoints=websecure"
       - "traefik.http.routers.tassinary-app.tls=true"
-      - "traefik.http.routers.tassinary-app.tls.certresolver=myresolver"
+      - "traefik.http.routers.tassinary-app.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.tassinary-app.loadbalancer.server.port=3000"
       # Optional: Redirect HTTP to HTTPS
       - "traefik.http.routers.tassinary-app-http.rule=Host(`tassinary.armtexai.org`)"
@@ -34,5 +34,6 @@ services:
           memory: 256M
 
 networks:
-  traefik_proxy:
+  armtexai:
     external: true
+    name: armtexai
