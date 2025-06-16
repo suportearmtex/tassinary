@@ -46,14 +46,16 @@ function WhatsApp() {
         throw new Error('Failed to fetch Evolution instance');
       }
 
-      const data = await response.json();
-      if (data && !data.status?.includes('connected')) {
-        setShowQrCode(true);
+
+      return response.json() as Promise<EvolutionInstance>;
+    },
+    refetchInterval: (data) => {
+      if (data && data.status !== 'connected') {
+        return 5000;
+
       }
       return data;
     },
-    refetchInterval: 15000,
-    retry: 1,
   });
 
   const createInstanceMutation = useMutation({
