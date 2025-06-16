@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2, Search, DollarSign, ChevronDown } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Appointment, Client, Service } from '../lib/types';
@@ -15,16 +15,34 @@ function Appointments() {
   const [dateFilter, setDateFilter] = useState('all');
   const [startDate, setStartDate] = useState(new Date());
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [clientFilter, setClientFilter] = useState('');
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [newAppointment, setNewAppointment] = useState({
     client_id: '',
     service_id: '',
     service: '',
     date: '',
     time: '',
+    price: '0.00',
   });
 
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target as Node)) {
+        setIsClientDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const calculateEndTime = (startTime: string, duration: string) => {
     const [hours, minutes] = startTime.split(':');
@@ -97,6 +115,11 @@ function Appointments() {
     enabled: !!user?.id,
   });
 
+  // Filter clients based on search
+  const filteredClients = clients?.filter(client =>
+    client.name.toLowerCase().includes(clientFilter.toLowerCase())
+  ) || [];
+
   const createAppointmentMutation = useMutation({
     mutationFn: async (appointmentData: typeof newAppointment) => {
       const selectedService = services?.find(s => s.id === appointmentData.service_id);
@@ -132,7 +155,12 @@ function Appointments() {
 
       const { data, error } = await supabase
         .from('appointments')
-        .insert([{ ...appointmentData, user_id: user?.id, status: 'pending' }])
+        .insert([{ 
+          ...appointmentData, 
+          user_id: user?.id, 
+          status: 'pending',
+          price: parseFloat(appointmentData.price)
+        }])
         .select()
         .single();
 
@@ -142,7 +170,8 @@ function Appointments() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
       setIsModalOpen(false);
-      setNewAppointment({ client_id: '', service_id: '', service: '', date: '', time: '' });
+      setNewAppointment({ client_id: '', service_id: '', service: '', date: '', time: '', price: '0.00' });
+      setClientFilter('');
       toast.success('Agendamento criado com sucesso!');
     },
     onError: (error: Error) => {
@@ -183,9 +212,14 @@ function Appointments() {
         throw new Error('Já existe um agendamento neste horário');
       }
 
+      const updateData = {
+        ...appointment,
+        price: typeof appointment.price === 'string' ? parseFloat(appointment.price) : appointment.price
+      };
+
       const { data, error } = await supabase
         .from('appointments')
-        .update(appointment)
+        .update(updateData)
         .eq('id', appointment.id)
         .select()
         .single();
@@ -198,6 +232,7 @@ function Appointments() {
       setIsModalOpen(false);
       setSelectedAppointment(null);
       setIsEditMode(false);
+      setClientFilter('');
       toast.success('Agendamento atualizado com sucesso!');
     },
     onError: (error: Error) => {
@@ -226,29 +261,38 @@ function Appointments() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ id, type }: { id: string; type: 'confirmation' | 'reminder' | 'cancellation' }) => {
-      const appointment = appointments?.find(apt => apt.id === id);
-      if (!appointment) throw new Error('Agendamento não encontrado');
+    mutationFn: async ({ id, type }: { id: string; type: 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'cancellation' }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
 
-      const messages_sent = {
-        ...appointment.messages_sent,
-        [type]: true
-      };
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointmentId: id,
+          type,
+        }),
+      });
 
-      const { error } = await supabase
-        .from('appointments')
-        .update({ messages_sent })
-        .eq('id', id);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send message');
+      }
 
-      if (error) throw error;
       return { id, type };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['appointments', user?.id] });
-      toast.success(`Mensagem de ${data.type} enviada com sucesso!`);
+      const messageType = data.type === 'confirmation' ? 'confirmação' : 
+                         data.type === 'reminder_24h' ? 'lembrete (24h)' :
+                         data.type === 'reminder_1h' ? 'lembrete (1h)' : 'cancelamento';
+      toast.success(`Mensagem de ${messageType} enviada com sucesso!`);
     },
-    onError: () => {
-      toast.error('Erro ao enviar mensagem');
+    onError: (error: Error) => {
+      toast.error(error.message);
     },
   });
 
@@ -260,7 +304,9 @@ function Appointments() {
       service: appointment.service,
       date: appointment.date,
       time: appointment.time,
+      price: appointment.price?.toString() || '0.00',
     });
+    setClientFilter(appointment.client?.name || '');
     setIsEditMode(true);
     setIsModalOpen(true);
   };
@@ -288,13 +334,33 @@ function Appointments() {
     }
   };
 
-  const handleSendMessage = async (id: string, type: 'confirmation' | 'reminder' | 'cancellation') => {
+  const handleSendMessage = async (id: string, type: 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'cancellation') => {
     const appointment = appointments?.find(apt => apt.id === id);
     if (!appointment?.messages_sent?.[type]) {
       await sendMessageMutation.mutateAsync({ id, type });
     } else {
       toast.error('Esta mensagem já foi enviada anteriormente');
     }
+  };
+
+  const handleServiceChange = (serviceId: string) => {
+    const selectedService = services?.find(s => s.id === serviceId);
+    setNewAppointment({
+      ...newAppointment,
+      service_id: serviceId,
+      service: selectedService?.name || '',
+      price: selectedService?.price?.toString() || '0.00',
+    });
+  };
+
+  const handleClientSelect = (clientId: string) => {
+    const selectedClient = clients?.find(c => c.id === clientId);
+    setNewAppointment({
+      ...newAppointment,
+      client_id: clientId,
+    });
+    setClientFilter(selectedClient?.name || '');
+    setIsClientDropdownOpen(false);
   };
 
   if (isLoadingAppointments) {
@@ -306,32 +372,34 @@ function Appointments() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Agendamentos</h2>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="all">Todos</option>
-                <option value="day">Hoje</option>
-                <option value="week">Esta Semana</option>
-                <option value="month">Este Mês</option>
-              </select>
-              <input
-                type="date"
-                value={format(startDate, 'yyyy-MM-dd')}
-                onChange={(e) => setStartDate(new Date(e.target.value))}
-                className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-[5px] py-[5px]"
+                >
+                  <option value="all">Todos</option>
+                  <option value="day">Hoje</option>
+                  <option value="week">Esta Semana</option>
+                  <option value="month">Este Mês</option>
+                </select>
+                <input
+                  type="date"
+                  value={format(startDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setStartDate(new Date(e.target.value))}
+                  className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-[5px] py-[5px]"
+                />
+              </div>
             </div>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               Novo Agendamento
@@ -340,8 +408,8 @@ function Appointments() {
         </div>
         <div className="divide-y divide-gray-100 dark:divide-gray-700">
           {appointments?.map((appointment) => (
-            <div key={appointment.id} className="p-6">
-              <div className="flex items-center justify-between">
+            <div key={appointment.id} className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center space-x-4">
                   <div className="flex-shrink-0">
                     <User className="w-10 h-10 text-gray-400" />
@@ -353,9 +421,15 @@ function Appointments() {
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {appointment.service_details?.name}
                     </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <DollarSign className="w-3 h-3 text-gray-400" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        R$ {appointment.price?.toFixed(2) || '0.00'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center space-x-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-8">
                   <div className="flex items-center space-x-2">
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -384,7 +458,7 @@ function Appointments() {
                   </div>
                 </div>
               </div>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   onClick={() => handleSendMessage(appointment.id, 'confirmation')}
                   disabled={appointment.messages_sent?.confirmation}
@@ -398,16 +472,28 @@ function Appointments() {
                   {appointment.messages_sent?.confirmation ? 'Enviado' : 'Confirmação'}
                 </button>
                 <button
-                  onClick={() => handleSendMessage(appointment.id, 'reminder')}
-                  disabled={appointment.messages_sent?.reminder}
+                  onClick={() => handleSendMessage(appointment.id, 'reminder_24h')}
+                  disabled={appointment.messages_sent?.reminder_24h}
                   className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
-                    appointment.messages_sent?.reminder
+                    appointment.messages_sent?.reminder_24h
                       ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
                       : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
                   }`}
                 >
                   <Send className="w-4 h-4" />
-                  {appointment.messages_sent?.reminder ? 'Enviado' : 'Lembrete'}
+                  {appointment.messages_sent?.reminder_24h ? 'Enviado' : 'Lembrete (24h)'}
+                </button>
+                <button
+                  onClick={() => handleSendMessage(appointment.id, 'reminder_1h')}
+                  disabled={appointment.messages_sent?.reminder_1h}
+                  className={`px-3 py-1 text-sm rounded-md flex items-center gap-1 ${
+                    appointment.messages_sent?.reminder_1h
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-70'
+                      : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  {appointment.messages_sent?.reminder_1h ? 'Enviado' : 'Lembrete (1h)'}
                 </button>
                 <button
                   onClick={() => handleSendMessage(appointment.id, 'cancellation')}
@@ -429,62 +515,103 @@ function Appointments() {
 
       {/* Appointment Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               {isEditMode ? 'Editar Agendamento' : 'Novo Agendamento'}
             </h3>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Cliente
                   </label>
-                  <select
-                    required
-                    value={newAppointment.client_id}
-                    onChange={(e) =>
-                      setNewAppointment({
-                        ...newAppointment,
-                        client_id: e.target.value,
-                      })
-                    }
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="">Selecione um cliente</option>
-                    {clients?.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative" ref={clientDropdownRef}>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Buscar e selecionar cliente..."
+                        value={clientFilter}
+                        onChange={(e) => {
+                          setClientFilter(e.target.value);
+                          setIsClientDropdownOpen(true);
+                          if (!e.target.value) {
+                            setNewAppointment({ ...newAppointment, client_id: '' });
+                          }
+                        }}
+                        onFocus={() => setIsClientDropdownOpen(true)}
+                        className="w-full px-[5px] py-[5px] pl-10 pr-10 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                    
+                    {isClientDropdownOpen && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                        {filteredClients.length > 0 ? (
+                          filteredClients.map((client) => (
+                            <div
+                              key={client.id}
+                              onClick={() => handleClientSelect(client.id)}
+                              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-gray-900 dark:text-white"
+                            >
+                              <div className="font-medium">{client.name}</div>
+                              {client.email && (
+                                <div className="text-sm text-gray-500 dark:text-gray-400">{client.email}</div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-2 text-gray-500 dark:text-gray-400">
+                            Nenhum cliente encontrado
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Serviço
                   </label>
                   <select
                     required
                     value={newAppointment.service_id}
-                    onChange={(e) =>
-                      setNewAppointment({
-                        ...newAppointment,
-                        service_id: e.target.value,
-                        service: services?.find(s => s.id === e.target.value)?.name || '',
-                      })
-                    }
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    onChange={(e) => handleServiceChange(e.target.value)}
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">Selecione um serviço</option>
                     {services?.map((service) => (
                       <option key={service.id} value={service.id}>
-                        {service.name} - {service.duration}
+                        {service.name} - {service.duration}min - R$ {service.price?.toFixed(2) || '0.00'}
                       </option>
                     ))}
                   </select>
                 </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Preço (R$)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={newAppointment.price}
+                    onChange={(e) =>
+                      setNewAppointment({
+                        ...newAppointment,
+                        price: e.target.value,
+                      })
+                    }
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Data
                   </label>
                   <input
@@ -497,14 +624,15 @@ function Appointments() {
                         date: e.target.value,
                       })
                     }
-                    className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Horário
                   </label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <input
                       type="time"
                       required
@@ -515,32 +643,35 @@ function Appointments() {
                           time: e.target.value,
                         })
                       }
-                      className="mt-1 p-2 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className="w-full sm:flex-1 px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     />
                     {newAppointment.service_id && newAppointment.time && (
-                      <div className="mt-1 p-2 bg-gray-100 dark:bg-gray-700 rounded-md text-gray-500 dark:text-gray-400">
+                      <div className="px-[5px] py-[5px] bg-gray-100 dark:bg-gray-700 rounded-md text-gray-500 dark:text-gray-400 text-sm whitespace-nowrap">
                         até {calculateEndTime(newAppointment.time, services?.find(s => s.id === newAppointment.service_id)?.duration || '0')}
                       </div>
                     )}
                   </div>
                 </div>
               </div>
-              <div className="mt-6 flex justify-end space-x-3">
+              
+              <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
                     setIsModalOpen(false);
                     setIsEditMode(false);
                     setSelectedAppointment(null);
+                    setClientFilter('');
+                    setIsClientDropdownOpen(false);
                   }}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={createAppointmentMutation.isPending || updateAppointmentMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={createAppointmentMutation.isPending || updateAppointmentMutation.isPending || !newAppointment.client_id}
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {(createAppointmentMutation.isPending || updateAppointmentMutation.isPending) && (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -555,7 +686,7 @@ function Appointments() {
 
       {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Confirmar Exclusão
@@ -563,19 +694,19 @@ function Appointments() {
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               Tem certeza que deseja excluir este agendamento?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
                 onClick={() => {
                   setIsDeleteModalOpen(false);
                   setAppointmentToDelete(null);
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
               >
                 Confirmar
               </button>

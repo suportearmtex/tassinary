@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { QrCode, RefreshCw, Smartphone, Loader2, Save, Plus, Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
@@ -22,29 +22,36 @@ const variablesList = [
 
 function WhatsApp() {
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
-  const [showQrCode, setShowQrCode] = useState(false);
-  const [isConfigureModalOpen, setIsConfigureModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: instance, isLoading: isLoadingInstance, error: instanceError } = useQuery({
+  const { data: instance, isLoading: isLoadingInstance, error: instanceError, refetch } = useQuery({
     queryKey: ['evolution-instance'],
     queryFn: async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('No session');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
 
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch Evolution instance');
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
         }
+        throw new Error('Failed to fetch Evolution instance');
+      }
 
+<<<<<<< versao6
+      return response.json() as Promise<EvolutionInstance>;
+    },
+    refetchInterval: (data) => {
+      if (data && data.status !== 'connected') {
+        return 5000;
+=======
         const data = await response.json();
         if (data && !data.status?.includes('connected')) {
           setShowQrCode(true);
@@ -53,10 +60,15 @@ function WhatsApp() {
       } catch (error) {
         console.error('Error fetching Evolution instance:', error);
         throw error;
+>>>>>>> main
       }
+      return 30000;
     },
+<<<<<<< versao6
+=======
     refetchInterval: 15000,
     retry: 1,
+>>>>>>> main
   });
 
   const createInstanceMutation = useMutation({
@@ -68,26 +80,49 @@ function WhatsApp() {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ type: 'create' }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create instance');
+        throw new Error('Failed to create instance');
       }
 
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
-      setIsConfigureModalOpen(false);
-      toast.success('Instância WhatsApp criada com sucesso!');
+      setIsCreateModalOpen(false);
+      toast.success('Configuração criada com sucesso!');
     },
-    onError: (error: Error) => {
-      console.error('Create instance error:', error);
-      toast.error(`Erro ao criar instância WhatsApp: ${error.message}`);
+    onError: () => {
+      toast.error('Erro ao criar configuração');
+    },
+  });
+
+  const refreshQrCodeMutation = useMutation({
+    mutationFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh QR code');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
+      toast.success('QR Code atualizado com sucesso!');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar QR Code');
     },
   });
 
@@ -104,8 +139,7 @@ function WhatsApp() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete instance');
+        throw new Error('Failed to delete instance');
       }
 
       return response.json();
@@ -113,42 +147,11 @@ function WhatsApp() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
       setIsDeleteModalOpen(false);
-      toast.success('Instância WhatsApp excluída com sucesso!');
+      toast.success('Configuração excluída com sucesso!');
     },
-    onError: (error: Error) => {
-      console.error('Delete instance error:', error);
-      toast.error(`Erro ao excluir instância WhatsApp: ${error.message}`);
-    },
-  });
-
-  const refreshQrCodeMutation = useMutation({
-    mutationFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('No session');
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-api`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ type: 'refresh' }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to refresh QR code');
-      }
-
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evolution-instance'] });
-      toast.success('QR Code atualizado com sucesso!');
-    },
-    onError: (error: Error) => {
-      console.error('Refresh QR code error:', error);
-      toast.error(`Erro ao atualizar QR Code: ${error.message}`);
+    onError: () => {
+      setIsDeleteModalOpen(false);
+      toast.error('Erro ao excluir configuração');
     },
   });
 
@@ -187,15 +190,27 @@ function WhatsApp() {
     },
   });
 
+  useEffect(() => {
+    if (instanceError) {
+      if (instanceError instanceof Error && instanceError.message === 'Instance not found') {
+        if (instance) {
+          deleteInstanceMutation.mutate();
+        }
+      } else {
+        toast.error('Erro ao carregar configuração do WhatsApp');
+      }
+    }
+  }, [instanceError, instance]);
+
+  const handleCreateInstance = () => {
+    createInstanceMutation.mutate();
+  };
+
   const handleRefreshQrCode = () => {
     refreshQrCodeMutation.mutate();
   };
 
   const handleDeleteInstance = () => {
-    setIsDeleteModalOpen(true);
-  };
-
-  const confirmDeleteInstance = () => {
     deleteInstanceMutation.mutate();
   };
 
@@ -232,9 +247,58 @@ function WhatsApp() {
     }
   };
 
-  if (instanceError) {
-    console.error('Instance error:', instanceError);
-  }
+  const renderQrCodeSection = () => {
+    if (isLoadingInstance || refreshQrCodeMutation.isPending) {
+      return <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />;
+    }
+
+    if (!instance) {
+      return <QrCode className="w-48 h-48 text-gray-400" />;
+    }
+
+    if (instance.status === 'connected') {
+      return (
+        <div className="flex flex-col items-center">
+          <Smartphone className="w-48 h-48 text-green-500" />
+          <p className="text-lg font-medium text-green-500 mt-4">
+            WhatsApp conectado com sucesso!
+          </p>
+        </div>
+      );
+    }
+
+    if (instance.qr_code) {
+      return (
+        <img
+          src={instance.qr_code}
+          alt="WhatsApp QR Code"
+          className="w-48 h-48 object-contain"
+        />
+      );
+    }
+
+    return <QrCode className="w-48 h-48 text-gray-400" />;
+  };
+
+  const getQrCodeMessage = () => {
+    if (isLoadingInstance || refreshQrCodeMutation.isPending) {
+      return 'Carregando QR Code...';
+    }
+
+    if (!instance) {
+      return 'Clique em "Criar Configuração" para começar';
+    }
+
+    if (instance.status === 'connected') {
+      return 'WhatsApp conectado e pronto para uso';
+    }
+
+    if (instance.qr_code) {
+      return 'Escaneie o código QR com seu WhatsApp para conectar';
+    }
+
+    return 'QR Code não disponível';
+  };
 
   return (
     <div className="p-6">
@@ -243,55 +307,45 @@ function WhatsApp() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Conexão WhatsApp
+              Configuração WhatsApp
             </h2>
-            <div className="flex gap-2">
-              {!instance && (
+            <div className="flex items-center gap-2">
+              {instance ? (
+                <>
+                  {instance.status !== 'connected' && (
+                    <button
+                      onClick={handleRefreshQrCode}
+                      disabled={isLoadingInstance || refreshQrCodeMutation.isPending}
+                      className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${(isLoadingInstance || refreshQrCodeMutation.isPending) ? 'animate-spin' : ''}`} />
+                      Atualizar QR
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setIsDeleteModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir Configuração
+                  </button>
+                </>
+              ) : (
                 <button
-                  onClick={() => setIsConfigureModalOpen(true)}
+                  onClick={() => setIsCreateModalOpen(true)}
                   disabled={createInstanceMutation.isPending}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
                 >
-                  {createInstanceMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                  Configurar WhatsApp
-                </button>
-              )}
-              {instance && !instance.status?.includes('connected') && (
-                <button
-                  onClick={() => setShowQrCode(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                >
-                  <QrCode className="w-4 h-4" />
-                  Exibir QR Code
-                </button>
-              )}
-              {instance && showQrCode && (
-                <button
-                  onClick={handleRefreshQrCode}
-                  disabled={isLoadingInstance || refreshQrCodeMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-4 h-4 ${(isLoadingInstance || refreshQrCodeMutation.isPending) ? 'animate-spin' : ''}`} />
-                  Atualizar QR
-                </button>
-              )}
-              {instance && (
-                <button
-                  onClick={handleDeleteInstance}
-                  disabled={deleteInstanceMutation.isPending}
-                  className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Excluir
+                  <Plus className="w-4 h-4" />
+                  Criar Configuração
                 </button>
               )}
             </div>
           </div>
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+<<<<<<< versao6
+            {renderQrCodeSection()}
+=======
             {isLoadingInstance || refreshQrCodeMutation.isPending ? (
               <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
             ) : instance?.qr_code && showQrCode && !instance.status?.includes('connected') ? (
@@ -303,23 +357,16 @@ function WhatsApp() {
             ) : (
               <QrCode className="w-48 h-48 text-gray-400" />
             )}
+>>>>>>> main
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-4">
-              {isLoadingInstance || refreshQrCodeMutation.isPending
-                ? 'Carregando...'
-                : !instance
-                ? 'Configure o WhatsApp para começar'
-                : instance.status?.includes('connected')
-                ? 'WhatsApp conectado'
-                : showQrCode
-                ? 'Escaneie o código QR com seu WhatsApp para conectar'
-                : 'Clique em "Exibir QR Code" para conectar'}
+              {getQrCodeMessage()}
             </p>
           </div>
           {instance && (
             <div className="mt-6 flex items-center justify-center gap-2 text-sm">
-              <Smartphone className={`w-4 h-4 ${getStatusColor(instance.status)}`} />
-              <span className={`font-medium ${getStatusColor(instance.status)}`}>
-                {getStatusText(instance.status)}
+              <Smartphone className={`w-4 h-4 ${getStatusColor(instance?.status || 'disconnected')}`} />
+              <span className={`font-medium ${getStatusColor(instance?.status || 'disconnected')}`}>
+                {getStatusText(instance?.status || 'disconnected')}
               </span>
             </div>
           )}
@@ -413,47 +460,47 @@ function WhatsApp() {
         </div>
       </div>
 
-      {/* Configure Instance Modal */}
-      {isConfigureModalOpen && (
+      {/* Create Configuration Modal */}
+      {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Configurar WhatsApp
+              Criar Nova Configuração
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Ao configurar uma nova instância do WhatsApp, você poderá conectar seu número e enviar mensagens automáticas para seus clientes.
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Você está prestes a criar uma nova configuração do WhatsApp. Depois de criar, você poderá conectar seu dispositivo escaneando o QR Code.
             </p>
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setIsConfigureModalOpen(false)}
+                onClick={() => setIsCreateModalOpen(false)}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => createInstanceMutation.mutate()}
+                onClick={handleCreateInstance}
                 disabled={createInstanceMutation.isPending}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
               >
                 {createInstanceMutation.isPending && (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 )}
-                Criar Instância
+                Criar
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Instance Modal */}
+      {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Excluir Instância
+              Confirmar Exclusão
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Tem certeza que deseja excluir esta instância do WhatsApp? Esta ação não pode ser desfeita.
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Tem certeza que deseja excluir esta configuração do WhatsApp? Esta ação não pode ser desfeita.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -463,14 +510,14 @@ function WhatsApp() {
                 Cancelar
               </button>
               <button
-                onClick={confirmDeleteInstance}
+                onClick={handleDeleteInstance}
                 disabled={deleteInstanceMutation.isPending}
                 className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
               >
                 {deleteInstanceMutation.isPending && (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 )}
-                Excluir
+                Confirmar
               </button>
             </div>
           </div>

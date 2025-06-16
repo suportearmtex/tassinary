@@ -11,6 +11,7 @@ export interface Service {
   id: string;
   name: string;
   duration: number;
+  price: number;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,7 @@ export interface Appointment {
   service: string;
   date: string;
   time: string;
+  price: number;
   status: 'pending' | 'confirmed' | 'cancelled';
   google_event_id?: string;
   is_synced_to_google: boolean;

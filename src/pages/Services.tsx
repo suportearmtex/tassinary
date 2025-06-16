@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Plus, Loader2, Edit2, Trash2 } from 'lucide-react';
+import { Clock, Plus, Loader2, Edit2, Trash2, DollarSign } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Service } from '../lib/types';
@@ -14,7 +14,8 @@ function Services() {
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [newService, setNewService] = useState({
     name: '',
-    duration: 60,
+    duration: '60',
+    price: '0.00',
   });
 
   const user = useAuthStore((state) => state.user);
@@ -49,7 +50,7 @@ function Services() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services', user?.id] });
       setIsModalOpen(false);
-      setNewService({ name: '', duration: 60 });
+      setNewService({ name: '', duration: '60', price: '0.00' });
       toast.success('Serviço criado com sucesso!');
     },
     onError: () => {
@@ -105,7 +106,8 @@ function Services() {
     setSelectedService(service);
     setNewService({
       name: service.name,
-      duration: service.duration,
+      duration: service.duration.toString(),
+      price: service.price.toString(),
     });
     setIsEditMode(true);
     setIsModalOpen(true);
@@ -127,10 +129,16 @@ function Services() {
     if (isEditMode && selectedService) {
       await updateServiceMutation.mutateAsync({
         id: selectedService.id,
-        ...newService,
+        name: newService.name,
+        duration: parseInt(newService.duration),
+        price: parseFloat(newService.price),
       });
     } else {
-      await createServiceMutation.mutateAsync(newService);
+      await createServiceMutation.mutateAsync({
+        name: newService.name,
+        duration: parseInt(newService.duration),
+        price: parseFloat(newService.price),
+      });
     }
   };
 
@@ -143,66 +151,93 @@ function Services() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Serviços</h2>
             <button
               onClick={() => {
                 setIsEditMode(false);
                 setSelectedService(null);
-                setNewService({ name: '', duration: 60 });
+                setNewService({ name: '', duration: '60', price: '0.00' });
                 setIsModalOpen(true);
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               Novo Serviço
             </button>
           </div>
         </div>
-        <div className="divide-y divide-gray-100 dark:divide-gray-700">
-          {services?.map((service) => (
-            <div key={service.id} className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-                    {service.name}
-                  </h3>
-                  <div className="flex items-center mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    <Clock className="w-4 h-4 mr-1" />
-                    {service.duration} minutos
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleEdit(service)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(service.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-          {services?.length === 0 && (
-            <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-              Nenhum serviço cadastrado
-            </div>
-          )}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Nome
+                </th>
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Duração
+                </th>
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Preço
+                </th>
+                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {services?.map((service) => (
+                <tr key={service.id}>
+                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      {service.name}
+                    </div>
+                  </td>
+                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {service.duration} minutos
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <DollarSign className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        R$ {service.price?.toFixed(2) || '0.00'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEdit(service)}
+                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(service.id)}
+                        className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Service Modal */}
+      {/* Form Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               {isEditMode ? 'Editar Serviço' : 'Novo Serviço'}
@@ -210,8 +245,8 @@ function Services() {
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Nome do Serviço
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Nome
                   </label>
                   <input
                     type="text"
@@ -220,27 +255,42 @@ function Services() {
                     onChange={(e) =>
                       setNewService({ ...newService, name: e.target.value })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Duração (minutos)
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    max="480"
                     required
+                    min="1"
                     value={newService.duration}
                     onChange={(e) =>
-                      setNewService({ ...newService, duration: parseInt(e.target.value) })
+                      setNewService({ ...newService, duration: e.target.value })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Preço (R$)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={newService.price}
+                    onChange={(e) =>
+                      setNewService({ ...newService, price: e.target.value })
+                    }
+                    className="w-full px-[5px] py-[5px] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
               </div>
-              <div className="mt-6 flex justify-end space-x-3">
+              <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -248,14 +298,14 @@ function Services() {
                     setIsEditMode(false);
                     setSelectedService(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={createServiceMutation.isPending || updateServiceMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {(createServiceMutation.isPending || updateServiceMutation.isPending) && (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -270,28 +320,32 @@ function Services() {
 
       {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Confirmar Exclusão
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Tem certeza que deseja excluir este serviço?
+              Tem certeza que deseja excluir este serviço? Esta ação não pode ser desfeita.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
                 onClick={() => {
                   setIsDeleteModalOpen(false);
                   setServiceToDelete(null);
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                disabled={deleteServiceMutation.isPending}
+                className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {deleteServiceMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
                 Confirmar
               </button>
             </div>

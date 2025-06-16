@@ -11,7 +11,7 @@ import Services from './pages/Services';
 import WhatsApp from './pages/WhatsApp';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
-import ResetPassword from './pages/ResetPassword';
+import Register from './pages/Register';
 import { useAuthStore } from './store/authStore';
 
 const queryClient = new QueryClient();
@@ -23,8 +23,9 @@ function App() {
     return (
       <BrowserRouter>
         <Routes>
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="*" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
         <Toaster position="top-right" />
       </BrowserRouter>
