@@ -1,15 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.7';
 
-<<<<<<< versao6
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL')!;
-const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY')!;
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-=======
->>>>>>> main
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -41,17 +31,10 @@ async function checkInstanceStatus(instanceName: string) {
     });
 
     if (!response.ok) {
-<<<<<<< versao6
-      if (response.status === 404) {
-        throw new Error('Instance not found');
-      }
-      throw new Error('Failed to check instance status');
-=======
       console.error(`Status check failed with status: ${response.status}`);
       const errorText = await response.text();
       console.error('Error response:', errorText);
       throw new Error(`Failed to check instance status: ${errorText}`);
->>>>>>> main
     }
 
     const data = await response.json();
@@ -71,14 +54,10 @@ async function refreshQrCode(instanceName: string) {
     });
 
     if (!response.ok) {
-<<<<<<< versao6
-      throw new Error('Failed to refresh QR code');
-=======
       console.error(`QR code refresh failed with status: ${response.status}`);
       const errorText = await response.text();
       console.error('Error response:', errorText);
       throw new Error(`Failed to refresh QR code: ${errorText}`);
->>>>>>> main
     }
 
     const data = await response.json();
@@ -89,8 +68,6 @@ async function refreshQrCode(instanceName: string) {
   }
 }
 
-<<<<<<< versao6
-=======
 async function deleteInstance(instanceName: string) {
   try {
     console.log(`Deleting instance: ${instanceName}`);
@@ -116,7 +93,6 @@ async function deleteInstance(instanceName: string) {
   }
 }
 
->>>>>>> main
 async function createEvolutionInstance(userId: string, userEmail: string) {
   try {
     const instanceName = `tssaas-${userEmail.split('@')[0]}`;
@@ -140,16 +116,11 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
     }
 
     const createData = await createResponse.json();
-<<<<<<< versao6
-
-    // Get initial QR code
-=======
     console.log('Instance created successfully:', createData);
 
     // Wait a moment for the instance to initialize
     await new Promise(resolve => setTimeout(resolve, 2000));
 
->>>>>>> main
     const qrCode = await refreshQrCode(instanceName);
     if (!qrCode) {
       throw new Error('Failed to generate QR code for new instance');
@@ -165,12 +136,9 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
       }]);
 
     if (insertError) {
-<<<<<<< versao6
-=======
       console.error('Database insertion error:', insertError);
       // Clean up the created instance if database insertion fails
       await deleteInstance(instanceName);
->>>>>>> main
       throw new Error('Failed to store instance information');
     }
 
@@ -226,9 +194,6 @@ Deno.serve(async (req) => {
     );
 
     if (authError || !user) {
-<<<<<<< versao6
-      throw new Error('Invalid authorization');
-=======
       console.error('Authentication error:', authError);
       return new Response(
         JSON.stringify({ error: 'Invalid authorization token' }),
@@ -237,7 +202,6 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
->>>>>>> main
     }
 
     // Handle DELETE request
@@ -271,13 +235,6 @@ Deno.serve(async (req) => {
       );
     }
 
-<<<<<<< versao6
-    const { data: existingInstance } = await supabase
-      .from('evolution_instances')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-=======
     // Handle POST request
     if (req.method === 'POST') {
       console.log('Processing POST request');
@@ -309,29 +266,12 @@ Deno.serve(async (req) => {
             .from('evolution_instances')
             .delete()
             .eq('user_id', user.id);
->>>>>>> main
 
-    if (existingInstance) {
-      try {
-        const currentStatus = await checkInstanceStatus(existingInstance.instance_name);
-        let updateData: { status: string; qr_code?: string | null } = { status: currentStatus };
-        
-        // Only refresh QR code if not connected and explicitly requested or status changed from connected
-        if (req.method === 'POST' || (currentStatus !== 'connected' && existingInstance.status === 'connected')) {
-          const newQrCode = await refreshQrCode(existingInstance.instance_name);
-          if (newQrCode) {
-            updateData.qr_code = newQrCode;
+          if (deleteError) {
+            console.error('Database deletion error:', deleteError);
           }
         }
 
-<<<<<<< versao6
-        // Always update status in database if it changed
-        if (currentStatus !== existingInstance.status || updateData.qr_code) {
-          const { error: updateError } = await supabase
-            .from('evolution_instances')
-            .update(updateData)
-            .eq('id', existingInstance.id);
-=======
         // Create new instance
         const result = await createEvolutionInstance(user.id, user.email!);
         return new Response(
@@ -362,44 +302,26 @@ Deno.serve(async (req) => {
 
         const qrCode = await refreshQrCode(existingInstance.instance_name);
         const status = await checkInstanceStatus(existingInstance.instance_name);
->>>>>>> main
 
-          if (updateError) {
-            throw new Error('Failed to update instance information');
-          }
+        const { error: updateError } = await supabase
+          .from('evolution_instances')
+          .update({
+            status: status,
+            qr_code: qrCode,
+          })
+          .eq('id', existingInstance.id);
 
-          return new Response(
-            JSON.stringify({ ...existingInstance, ...updateData }),
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            }
-          );
+        if (updateError) {
+          console.error('Database update error:', updateError);
+          throw new Error('Failed to update instance status');
         }
 
         return new Response(
-          JSON.stringify({ ...existingInstance, status: currentStatus }),
+          JSON.stringify({ ...existingInstance, status: status, qr_code: qrCode }),
           {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           }
         );
-<<<<<<< versao6
-      } catch (error) {
-        if (error instanceof Error && error.message === 'Instance not found') {
-          // If instance doesn't exist in Evolution API but exists in our database,
-          // delete the database record and return 404
-          const { error: deleteError } = await supabase
-            .from('evolution_instances')
-            .delete()
-            .eq('user_id', user.id);
-
-          return new Response(
-            JSON.stringify({ error: 'Instance not found' }),
-            {
-              status: 404,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            }
-          );
-=======
       }
 
       return new Response(
@@ -445,20 +367,11 @@ Deno.serve(async (req) => {
         if (updateError) {
           console.error('Database update error:', updateError);
           throw new Error('Failed to update instance status');
->>>>>>> main
         }
-        throw error;
       }
-    }
 
-    if (req.method === 'POST') {
-      const result = await createEvolutionInstance(user.id, user.email!);
       return new Response(
-<<<<<<< versao6
-        JSON.stringify(result),
-=======
         JSON.stringify({ ...existingInstance, status: currentStatus, qr_code: qrCode }),
->>>>>>> main
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
@@ -475,18 +388,12 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     return new Response(
-<<<<<<< versao6
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      {
-        status: error instanceof Error && error.message === 'Instance not found' ? 404 : 400,
-=======
       JSON.stringify({ 
         error: error.message || 'Internal server error',
         details: error.stack 
       }),
       {
         status: error.message.includes('environment variable') ? 500 : 400,
->>>>>>> main
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

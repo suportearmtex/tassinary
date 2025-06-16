@@ -24,6 +24,7 @@ function WhatsApp() {
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [showQrCode, setShowQrCode] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: instance, isLoading: isLoadingInstance, error: instanceError, refetch } = useQuery({
@@ -45,30 +46,14 @@ function WhatsApp() {
         throw new Error('Failed to fetch Evolution instance');
       }
 
-<<<<<<< versao6
-      return response.json() as Promise<EvolutionInstance>;
-    },
-    refetchInterval: (data) => {
-      if (data && data.status !== 'connected') {
-        return 5000;
-=======
-        const data = await response.json();
-        if (data && !data.status?.includes('connected')) {
-          setShowQrCode(true);
-        }
-        return data;
-      } catch (error) {
-        console.error('Error fetching Evolution instance:', error);
-        throw error;
->>>>>>> main
+      const data = await response.json();
+      if (data && !data.status?.includes('connected')) {
+        setShowQrCode(true);
       }
-      return 30000;
+      return data;
     },
-<<<<<<< versao6
-=======
     refetchInterval: 15000,
     retry: 1,
->>>>>>> main
   });
 
   const createInstanceMutation = useMutation({
@@ -80,7 +65,9 @@ function WhatsApp() {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ type: 'create' }),
       });
 
       if (!response.ok) {
@@ -108,7 +95,9 @@ function WhatsApp() {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ type: 'refresh' }),
       });
 
       if (!response.ok) {
@@ -267,10 +256,10 @@ function WhatsApp() {
       );
     }
 
-    if (instance.qr_code) {
+    if (instance.qr_code && showQrCode && !instance.status?.includes('connected')) {
       return (
         <img
-          src={instance.qr_code}
+          src={`data:image/png;base64,${instance.qr_code}`}
           alt="WhatsApp QR Code"
           className="w-48 h-48 object-contain"
         />
@@ -343,21 +332,7 @@ function WhatsApp() {
             </div>
           </div>
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-<<<<<<< versao6
             {renderQrCodeSection()}
-=======
-            {isLoadingInstance || refreshQrCodeMutation.isPending ? (
-              <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
-            ) : instance?.qr_code && showQrCode && !instance.status?.includes('connected') ? (
-              <img
-                src={`data:image/png;base64,${instance.qr_code}`}
-                alt="WhatsApp QR Code"
-                className="w-48 h-48 object-contain"
-              />
-            ) : (
-              <QrCode className="w-48 h-48 text-gray-400" />
-            )}
->>>>>>> main
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-4">
               {getQrCodeMessage()}
             </p>
