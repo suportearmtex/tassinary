@@ -13,6 +13,7 @@ import {
   X,
   Sun,
   Moon,
+  Shield,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
@@ -39,6 +40,11 @@ function Layout({ children }: LayoutProps) {
     { id: '/settings', label: 'Configurações', icon: Settings },
   ];
 
+  // Adicionar item de admin apenas para administradores
+  if (user?.role === 'admin') {
+    navItems.push({ id: '/admin', label: 'Administração', icon: Shield });
+  }
+
   React.useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
@@ -50,6 +56,24 @@ function Layout({ children }: LayoutProps) {
   const confirmLogout = async () => {
     await signOut();
     setIsLogoutModalOpen(false);
+  };
+
+  const getRoleLabel = (role: string) => {
+    const labels = {
+      admin: 'Administrador',
+      professional: 'Profissional',
+      receptionist: 'Recepcionista',
+    };
+    return labels[role as keyof typeof labels] || role;
+  };
+
+  const getRoleColor = (role: string) => {
+    const colors = {
+      admin: 'text-red-600 dark:text-red-400',
+      professional: 'text-blue-600 dark:text-blue-400',
+      receptionist: 'text-green-600 dark:text-green-400',
+    };
+    return colors[role as keyof typeof colors] || 'text-gray-600 dark:text-gray-400';
   };
 
   return (
@@ -91,7 +115,14 @@ function Layout({ children }: LayoutProps) {
                 alt="Profile"
                 className="w-8 h-8 rounded-full object-cover"
               />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{user?.email}</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {user?.full_name || user?.email}
+                </span>
+                <span className={`text-xs ${getRoleColor(user?.role || '')}`}>
+                  {getRoleLabel(user?.role || '')}
+                </span>
+              </div>
               <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
             </div>
             <button 

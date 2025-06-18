@@ -10,6 +10,7 @@ import Clients from './pages/Clients';
 import Services from './pages/Services';
 import WhatsApp from './pages/WhatsApp';
 import Settings from './pages/Settings';
+import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { useAuthStore } from './store/authStore';
@@ -18,6 +19,15 @@ const queryClient = new QueryClient();
 
 function App() {
   const user = useAuthStore((state) => state.user);
+  const loading = useAuthStore((state) => state.loading);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -44,6 +54,9 @@ function App() {
               <Route path="/services" element={<Services />} />
               <Route path="/whatsapp" element={<WhatsApp />} />
               <Route path="/settings" element={<Settings />} />
+              {user.role === 'admin' && (
+                <Route path="/admin" element={<Admin />} />
+              )}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
