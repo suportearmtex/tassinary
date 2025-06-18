@@ -8,7 +8,6 @@ function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,11 +40,6 @@ function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
-      toast.error('Por favor, preencha todos os campos obrigatórios');
-      return;
-    }
-    
     if (password !== confirmPassword) {
       toast.error('As senhas não coincidem');
       return;
@@ -76,7 +70,7 @@ function Register() {
         password: password.trim(),
         options: {
           data: {
-            full_name: fullName.trim() || user.name || user.full_name || email.split('@')[0],
+            full_name: user.name || user.full_name || email.split('@')[0],
             external_user_id: user.id,
           }
         }
@@ -98,14 +92,7 @@ function Register() {
       }
     } catch (error: any) {
       console.error('Registration error:', error);
-      
-      if (error.message?.includes('User already registered')) {
-        toast.error('Este email já está cadastrado. Tente fazer login.');
-      } else if (error.message?.includes('Email rate limit exceeded')) {
-        toast.error('Muitas tentativas de registro. Tente novamente em alguns minutos.');
-      } else {
-        toast.error(error.message || 'Erro ao criar conta. Tente novamente.');
-      }
+      toast.error(error.message || 'Erro ao criar conta. Tente novamente.');
     } finally {
       setIsLoading(false);
     }
@@ -126,8 +113,7 @@ function Register() {
           Ou{' '}
           <button
             onClick={() => navigate('/login')}
-            disabled={isLoading}
-            className="font-medium text-blue-600 hover:text-blue-500 transition-colors disabled:opacity-50"
+            className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
           >
             faça login se já tem uma conta
           </button>
@@ -142,7 +128,7 @@ function Register() {
                 htmlFor="email"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Email *
+                Email
               </label>
               <div className="relative">
                 <input
@@ -153,31 +139,8 @@ function Register() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
-                  className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
                   placeholder="seu@email.com"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="fullName"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Nome Completo
-              </label>
-              <div className="relative">
-                <input
-                  id="fullName"
-                  name="fullName"
-                  type="text"
-                  autoComplete="name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  disabled={isLoading}
-                  className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  placeholder="Seu nome completo (opcional)"
                 />
               </div>
             </div>
@@ -187,7 +150,7 @@ function Register() {
                 htmlFor="password"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Senha *
+                Senha
               </label>
               <div className="relative">
                 <input
@@ -198,15 +161,13 @@ function Register() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  className="appearance-none block w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="appearance-none block w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
                   placeholder="Mínimo 6 caracteres"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={isLoading}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:opacity-50"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -222,7 +183,7 @@ function Register() {
                 htmlFor="confirmPassword"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Confirmar Senha *
+                Confirmar Senha
               </label>
               <div className="relative">
                 <input
@@ -233,15 +194,13 @@ function Register() {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={isLoading}
-                  className="appearance-none block w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="appearance-none block w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
                   placeholder="Confirme sua senha"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={isLoading}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:opacity-50"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -288,8 +247,7 @@ function Register() {
             <div className="mt-6">
               <button
                 onClick={() => navigate('/login')}
-                disabled={isLoading}
-                className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
               >
                 Fazer Login
               </button>
