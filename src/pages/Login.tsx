@@ -14,18 +14,32 @@ function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!email.trim() || !password.trim()) {
+      toast.error('Por favor, preencha todos os campos');
+      return;
+    }
+
     setIsLoading(true);
     
     try {
       await signIn(email.trim(), password.trim());
       toast.success('Login realizado com sucesso!');
+      navigate('/');
     } catch (error: any) {
+      console.error('Login error:', error);
+      
       // Check if it's an invalid credentials error
       if (error?.message?.includes('Invalid login credentials') || 
-          error?.code === 'invalid_credentials') {
+          error?.code === 'invalid_credentials' ||
+          error?.message?.includes('invalid_grant')) {
         toast.error('Credenciais inválidas. Verifique seu email e senha.');
+      } else if (error?.message?.includes('Email not confirmed')) {
+        toast.error('Por favor, confirme seu email antes de fazer login.');
+      } else if (error?.message?.includes('Too many requests')) {
+        toast.error('Muitas tentativas de login. Tente novamente em alguns minutos.');
       } else {
-        toast.error('Erro ao fazer login. Tente novamente.');
+        toast.error(error?.message || 'Erro ao fazer login. Tente novamente.');
       }
     } finally {
       setIsLoading(false);
@@ -73,7 +87,8 @@ function Login() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
+                  disabled={isLoading}
+                  className="appearance-none block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="seu@email.com"
                 />
               </div>
@@ -95,13 +110,15 @@ function Login() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm"
+                  disabled={isLoading}
+                  className="appearance-none block w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Sua senha"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  disabled={isLoading}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:opacity-50"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -145,7 +162,8 @@ function Login() {
             <div className="mt-6">
               <button
                 onClick={() => navigate('/register')}
-                className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                disabled={isLoading}
+                className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Criar Nova Conta
               </button>
