@@ -15,7 +15,6 @@ export interface Service {
   created_at: string;
   updated_at: string;
 }
-
 export interface Appointment {
   id: string;
   client_id: string;
@@ -25,7 +24,7 @@ export interface Appointment {
   time: string;
   price: number;
   status: 'pending' | 'confirmed' | 'cancelled';
-  google_event_id?: string;
+  google_event_id?: string | null; // CORRIGIDO: permitir null
   is_synced_to_google: boolean;
   created_at: string;
   updated_at: string;
@@ -37,7 +36,6 @@ export interface Appointment {
     cancellation?: boolean;
   };
 }
-
 export interface MessageTemplate {
   id: string;
   type: 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'cancellation';
