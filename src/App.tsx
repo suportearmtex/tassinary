@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Appointments from './pages/Appointments';
@@ -17,7 +18,24 @@ import Users from './pages/Users';
 const queryClient = new QueryClient();
 
 function App() {
-  const user = useAuthStore((state) => state.user);
+  const { user, loading, initializeAuth } = useAuthStore();
+
+  // Inicializar autenticação ao carregar a aplicação
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  // Mostrar loading enquanto verifica autenticação
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
