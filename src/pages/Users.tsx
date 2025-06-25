@@ -69,10 +69,16 @@ function Users() {
   });
 
   // Mutation para alterar senha do usuário
+  // Mutation para alterar senha do usuário - CORRIGIDA
   const changePasswordMutation = useMutation({
     mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
-      const { error } = await supabase.auth.admin.updateUserById(userId, {
-        password: password
+      // Chama a Edge Function que tem privilégios administrativos
+      const { error } = await supabase.functions.invoke('admin-update-user', {
+        body: {
+          userId,
+          password,
+          action: 'update_password'
+        }
       });
 
       if (error) throw error;
