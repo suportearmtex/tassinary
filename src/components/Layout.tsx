@@ -60,7 +60,7 @@ function Layout({ children }: LayoutProps) {
 
   // Adicionar link de usuários apenas para admins
   if (user?.role === 'admin') {
-    navigation.splice(-1, 0, { name: 'Usuários', href: '/users', icon: Shield });
+    navigation.splice(-1, 0, { name: 'Gerenciar Usuários', href: '/users', icon: Shield });
   }
 
   const getRoleDisplayName = (role: string) => {

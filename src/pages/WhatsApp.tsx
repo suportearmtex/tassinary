@@ -46,17 +46,29 @@ function WhatsApp() {
         throw new Error('Failed to fetch Evolution instance');
       }
 
-
       return response.json() as Promise<EvolutionInstance>;
     },
     refetchInterval: (data) => {
       if (data && data.status !== 'connected') {
         return 5000;
-
       }
-      return data;
+      return false;
     },
   });
+
+  // ✅ ADICIONADO: useEffect para mostrar QR code automaticamente
+  useEffect(() => {
+    if (instance) {
+      // Mostrar QR code se existe e não está conectado
+      if (instance.qr_code && instance.status !== 'connected') {
+        setShowQrCode(true);
+      }
+      // Esconder QR code se conectado
+      else if (instance.status === 'connected') {
+        setShowQrCode(false);
+      }
+    }
+  }, [instance]);
 
   const createInstanceMutation = useMutation({
     mutationFn: async () => {
@@ -205,6 +217,11 @@ function WhatsApp() {
     deleteInstanceMutation.mutate();
   };
 
+  // ✅ ADICIONADO: função para toggle do QR code
+  const handleToggleQrCode = () => {
+    setShowQrCode(!showQrCode);
+  };
+
   const handleSaveTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingTemplate) {
@@ -238,6 +255,7 @@ function WhatsApp() {
     }
   };
 
+  // ✅ CORRIGIDO: função renderQrCodeSection com lógica correta
   const renderQrCodeSection = () => {
     if (isLoadingInstance || refreshQrCodeMutation.isPending) {
       return <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />;
@@ -258,19 +276,59 @@ function WhatsApp() {
       );
     }
 
-    if (instance.qr_code && showQrCode && !instance.status?.includes('connected')) {
+    // ✅ CORREÇÃO PRINCIPAL: Verificar showQrCode E se há QR code
+    if (instance.qr_code && showQrCode) {
+      // Verificar se o QR code já contém o prefixo data:image
+      const qrCodeSrc = instance.qr_code.startsWith('data:image/') 
+        ? instance.qr_code 
+        : `data:image/png;base64,${instance.qr_code}`;
+      
       return (
-        <img
-          src={`data:image/png;base64,${instance.qr_code}`}
-          alt="WhatsApp QR Code"
-          className="w-48 h-48 object-contain"
-        />
+        <div className="flex flex-col items-center">
+          <img
+            src={qrCodeSrc}
+            alt="WhatsApp QR Code"
+            className="w-64 h-64 object-contain border-2 border-gray-200 rounded-lg shadow-sm"
+            onError={(e) => {
+              console.error('Erro ao carregar QR Code:', instance.qr_code);
+              // Esconder a imagem quebrada e mostrar fallback
+              e.currentTarget.style.display = 'none';
+              // Mostrar mensagem de erro
+              toast.error('Erro ao carregar QR Code. Tente atualizar.');
+            }}
+            onLoad={() => {
+              console.log('QR Code carregado com sucesso');
+            }}
+          />
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={handleToggleQrCode}
+              className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded"
+            >
+              Esconder QR Code
+            </button>
+          </div>
+        </div>
       );
     }
 
-    return <QrCode className="w-48 h-48 text-gray-400" />;
+    // Mostrar ícone de QR Code com botão para exibir
+    return (
+      <div className="flex flex-col items-center">
+        <QrCode className="w-48 h-48 text-gray-400" />
+        {instance.qr_code && (
+          <button
+            onClick={handleToggleQrCode}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            Mostrar QR Code
+          </button>
+        )}
+      </div>
+    );
   };
 
+  // ✅ CORRIGIDO: função getQrCodeMessage melhorada
   const getQrCodeMessage = () => {
     if (isLoadingInstance || refreshQrCodeMutation.isPending) {
       return 'Carregando QR Code...';
@@ -284,11 +342,15 @@ function WhatsApp() {
       return 'WhatsApp conectado e pronto para uso';
     }
 
-    if (instance.qr_code) {
+    if (instance.qr_code && showQrCode) {
       return 'Escaneie o código QR com seu WhatsApp para conectar';
     }
 
-    return 'QR Code não disponível';
+    if (instance.qr_code && !showQrCode) {
+      return 'QR Code disponível - clique para mostrar';
+    }
+
+    return 'QR Code não disponível - tente atualizar';
   };
 
   return (
@@ -311,6 +373,16 @@ function WhatsApp() {
                     >
                       <RefreshCw className={`w-4 h-4 ${(isLoadingInstance || refreshQrCodeMutation.isPending) ? 'animate-spin' : ''}`} />
                       Atualizar QR
+                    </button>
+                  )}
+                  {/* ✅ ADICIONADO: Botão para toggle QR code */}
+                  {instance.qr_code && instance.status !== 'connected' && (
+                    <button
+                      onClick={handleToggleQrCode}
+                      className="flex items-center gap-2 px-4 py-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      {showQrCode ? 'Esconder' : 'Mostrar'} QR
                     </button>
                   )}
                   <button
@@ -355,66 +427,73 @@ function WhatsApp() {
             Mensagens Automáticas
           </h2>
           {isLoadingTemplates ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <div className="flex justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {templates?.map((template) => (
-                <div
-                  key={template.id}
-                  className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg"
-                >
-                  <h3 className="font-medium text-gray-900 dark:text-white mb-2">
-                    {messageTypes[template.type]}
-                  </h3>
+                <div key={template.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-gray-900 dark:text-white">
+                      {messageTypes[template.type as keyof typeof messageTypes]}
+                    </h3>
+                    <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-1 rounded">
+                      {template.type}
+                    </span>
+                  </div>
                   {editingTemplate?.id === template.id ? (
                     <form onSubmit={handleSaveTemplate} className="space-y-4">
-                      <textarea
-                        value={editingTemplate.content}
-                        onChange={(e) =>
-                          setEditingTemplate({
-                            ...editingTemplate,
-                            content: e.target.value,
-                          })
-                        }
-                        className="w-full h-32 p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
-                      />
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          Variáveis disponíveis:
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            {variablesList.map((variable) => (
-                              <span
-                                key={variable.name}
-                                title={variable.description}
-                                className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs cursor-help"
-                              >
-                                {variable.name}
-                              </span>
-                            ))}
-                          </div>
+                      <div>
+                        <textarea
+                          value={editingTemplate.content}
+                          onChange={(e) => setEditingTemplate({ ...editingTemplate, content: e.target.value })}
+                          className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                          rows={4}
+                          placeholder="Digite a mensagem..."
+                        />
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Variáveis disponíveis:</span>
+                          {variablesList.map((variable) => (
+                            <span
+                              key={variable.name}
+                              className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded cursor-pointer"
+                              onClick={() => {
+                                const textarea = document.querySelector('textarea');
+                                if (textarea) {
+                                  const start = textarea.selectionStart;
+                                  const end = textarea.selectionEnd;
+                                  const text = editingTemplate.content;
+                                  const newContent = text.substring(0, start) + variable.name + text.substring(end);
+                                  setEditingTemplate({ ...editingTemplate, content: newContent });
+                                }
+                              }}
+                              title={variable.description}
+                            >
+                              {variable.name}
+                            </span>
+                          ))}
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditingTemplate(null)}
-                            className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={updateTemplateMutation.isPending}
-                            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
-                          >
-                            {updateTemplateMutation.isPending && (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            )}
-                            <Save className="w-3 h-3" />
-                            Salvar
-                          </button>
-                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingTemplate(null)}
+                          className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={updateTemplateMutation.isPending}
+                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {updateTemplateMutation.isPending && (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          )}
+                          <Save className="w-3 h-3" />
+                          Salvar
+                        </button>
                       </div>
                     </form>
                   ) : (
@@ -504,4 +583,4 @@ function WhatsApp() {
   );
 }
 
-export default WhatsApp;
+export default WhatsApp; 

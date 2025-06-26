@@ -69,7 +69,6 @@ function Users() {
   });
 
   // Mutation para alterar senha do usuário
-  // Mutation para alterar senha do usuário - CORRIGIDA
   const changePasswordMutation = useMutation({
     mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
       // Chama a Edge Function que tem privilégios administrativos

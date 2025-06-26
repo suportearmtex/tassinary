@@ -1,13 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.7';
 
-
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL')!;
 const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY')!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,12 +22,10 @@ async function checkInstanceStatus(instanceName: string) {
     });
 
     if (!response.ok) {
-
       if (response.status === 404) {
         throw new Error('Instance not found');
       }
       throw new Error('Failed to check instance status');
-
     }
 
     const data = await response.json();
@@ -42,6 +38,8 @@ async function checkInstanceStatus(instanceName: string) {
 
 async function refreshQrCode(instanceName: string) {
   try {
+    console.log(`Attempting to refresh QR code for instance: ${instanceName}`);
+    
     const response = await fetch(`${evolutionApiUrl}/instance/connect/${instanceName}`, {
       headers: {
         'apikey': evolutionApiKey,
@@ -49,19 +47,34 @@ async function refreshQrCode(instanceName: string) {
     });
 
     if (!response.ok) {
-
+      const errorText = await response.text();
+      console.error(`Failed to refresh QR code for ${instanceName}:`, errorText);
       throw new Error('Failed to refresh QR code');
-
     }
 
     const data = await response.json();
-    return data.qrcode?.base64 || null;
+    console.log('Refresh QR code response:', data);
+
+    // ✅ CORREÇÃO: Verificar múltiplos formatos possíveis do QR code
+    let qrCode = null;
+    
+    if (data.qrcode && data.qrcode.base64) {
+      qrCode = data.qrcode.base64;
+    } else if (data.qrcode && typeof data.qrcode === 'string') {
+      qrCode = data.qrcode;
+    } else if (data.base64) {
+      qrCode = data.base64;
+    } else if (data.qr && data.qr.base64) {
+      qrCode = data.qr.base64;
+    }
+
+    console.log('QR Code extracted:', qrCode ? 'success' : 'null');
+    return qrCode;
   } catch (error) {
     console.error('Error refreshing QR code:', error);
     return null;
   }
 }
-
 
 async function createEvolutionInstance(userId: string, userEmail: string) {
   try {
@@ -82,27 +95,49 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
     });
 
     if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      console.error('Evolution API create error:', errorText);
       throw new Error('Failed to create Evolution instance');
     }
 
     const createData = await createResponse.json();
+    console.log('Evolution API create response:', createData);
 
-
-    // Get initial QR code
-
-    const qrCode = await refreshQrCode(instanceName);
+    // ✅ CORREÇÃO: Tentar usar o QR code da resposta de criação primeiro
+    let qrCode = null;
+    
+    // Opção 1: QR code diretamente da resposta de criação
+    if (createData.qrcode && createData.qrcode.base64) {
+      qrCode = createData.qrcode.base64;
+      console.log('QR Code obtained from create response');
+    }
+    // Opção 2: QR code em formato alternativo
+    else if (createData.qrcode && typeof createData.qrcode === 'string') {
+      qrCode = createData.qrcode;
+      console.log('QR Code obtained from create response (string format)');
+    }
+    // Opção 3: Buscar QR code com delay após criação
+    else {
+      console.log('QR Code not in create response, trying to fetch after delay...');
+      
+      // Aguardar um pouco para a instância ficar pronta
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      qrCode = await refreshQrCode(instanceName);
+      console.log('QR Code obtained from refresh:', qrCode ? 'success' : 'null');
+    }
 
     const { error: insertError } = await supabase
       .from('evolution_instances')
       .insert([{
-        user_id: userId,
+        user_id: userId,  // ✅ Corrigido
         instance_name: instanceName,
         qr_code: qrCode,
         status: 'created',
       }]);
 
     if (insertError) {
-
+      console.error('Database insertion error:', insertError);
       throw new Error('Failed to store instance information');
     }
 
@@ -151,9 +186,7 @@ Deno.serve(async (req) => {
     );
 
     if (authError || !user) {
-
       throw new Error('Invalid authorization');
-
     }
 
     // Handle DELETE request
@@ -187,16 +220,77 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Handle POST request (create or refresh)
+    if (req.method === 'POST') {
+      const body = await req.json();
+      
+      if (body.type === 'create') {
+        // Create new instance
+        const result = await createEvolutionInstance(user.id, user.email!);
+        
+        return new Response(
+          JSON.stringify(result),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+      
+      if (body.type === 'refresh') {
+        // Refresh QR code for existing instance
+        const { data: existingInstance } = await supabase
+          .from('evolution_instances')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
 
+        if (!existingInstance) {
+          throw new Error('No instance found');
+        }
+
+        const qrCode = await refreshQrCode(existingInstance.instance_name);
+        
+        const { error: updateError } = await supabase
+          .from('evolution_instances')
+          .update({
+            qr_code: qrCode,
+          })
+          .eq('id', existingInstance.id);
+
+        if (updateError) {
+          console.error('Database update error:', updateError);
+          throw new Error('Failed to update QR code');
+        }
+
+        return new Response(
+          JSON.stringify({ ...existingInstance, qr_code: qrCode }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    }
+
+    // Handle GET request (check status and update)
     const { data: existingInstance } = await supabase
       .from('evolution_instances')
       .select('*')
       .eq('user_id', user.id)
       .single();
 
+    if (existingInstance) {
+      try {
+        const currentStatus = await checkInstanceStatus(existingInstance.instance_name);
+        
+        const updateData: any = {
+          status: currentStatus,
+        };
 
-          if (deleteError) {
-            console.error('Database deletion error:', deleteError);
+        // If disconnected and no QR code, try to get one
+        if (currentStatus === 'disconnected' && !existingInstance.qr_code) {
+          const qrCode = await refreshQrCode(existingInstance.instance_name);
+          if (qrCode) {
+            updateData.qr_code = qrCode;
           }
         }
 
@@ -207,22 +301,13 @@ Deno.serve(async (req) => {
             .update(updateData)
             .eq('id', existingInstance.id);
 
-
-        const { error: updateError } = await supabase
-          .from('evolution_instances')
-          .update({
-            status: status,
-            qr_code: qrCode,
-          })
-          .eq('id', existingInstance.id);
-
-        if (updateError) {
-          console.error('Database update error:', updateError);
-          throw new Error('Failed to update instance status');
+          if (updateError) {
+            console.error('Database update error:', updateError);
+          }
         }
 
         return new Response(
-          JSON.stringify({ ...existingInstance, status: status, qr_code: qrCode }),
+          JSON.stringify({ ...existingInstance, ...updateData }),
           {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           }
@@ -237,6 +322,10 @@ Deno.serve(async (req) => {
             .delete()
             .eq('user_id', user.id);
 
+          if (deleteError) {
+            console.error('Database deletion error:', deleteError);
+          }
+
           return new Response(
             JSON.stringify({ error: 'Instance not found' }),
             {
@@ -244,18 +333,16 @@ Deno.serve(async (req) => {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             }
           );
-
         }
+
+        // For other errors, return the existing instance data
+        return new Response(
+          JSON.stringify(existingInstance),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
       }
-
-      return new Response(
-
-        JSON.stringify(result),
-
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
     }
 
     return new Response(
@@ -268,11 +355,9 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     return new Response(
-
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       {
         status: error instanceof Error && error.message === 'Instance not found' ? 404 : 400,
-
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
