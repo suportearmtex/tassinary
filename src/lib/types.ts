@@ -59,6 +59,7 @@ export interface EvolutionInstance {
   user_id: string;
   instance_name: string;
   qr_code: string | null;
+  jid: string | null; // ✅ ADICIONADO: Campo para armazenar o JID do WhatsApp
   status: string;
   created_at: string;
   updated_at: string;

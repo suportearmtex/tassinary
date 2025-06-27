@@ -1,63 +1,92 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.39.7';
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL')!;
-const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY')!;
-
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL');
+const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS'
 };
-
-async function checkInstanceStatus(instanceName: string) {
+// ✅ FUNÇÃO CORRIGIDA: Buscar JID da instância usando fetchInstances (formato real da API)
+async function fetchInstanceJid(instanceName) {
   try {
+    console.log(`Fetching JID for instance: ${instanceName}`);
+    const response = await fetch(`${evolutionApiUrl}/instance/fetchInstances`, {
+      headers: {
+        'apikey': evolutionApiKey
+      }
+    });
+    if (!response.ok) {
+      console.error(`Failed to fetch instances: ${response.status} ${response.statusText}`);
+      return null;
+    }
+    const data = await response.json();
+    console.log('FetchInstances response:', JSON.stringify(data, null, 2));
+    // ✅ CORREÇÃO: A resposta é um array direto com objetos de instâncias
+    if (Array.isArray(data)) {
+      const targetInstance = data.find((instance)=>instance.name === instanceName);
+      if (targetInstance) {
+        // ✅ CORREÇÃO: O JID está no campo "ownerJid"
+        if (targetInstance.ownerJid) {
+          console.log(`JID found for ${instanceName}: ${targetInstance.ownerJid}`);
+          console.log(`Connection status: ${targetInstance.connectionStatus}`);
+          return targetInstance.ownerJid;
+        }
+        // Se não tem ownerJid, significa que não está conectado ainda
+        console.log(`Instance ${instanceName} found but no JID available`);
+        console.log(`Connection status: ${targetInstance.connectionStatus}`);
+        return null;
+      }
+    }
+    console.log(`Instance ${instanceName} not found in fetchInstances response`);
+    return null;
+  } catch (error) {
+    console.error('Error fetching instance JID:', error);
+    return null;
+  }
+}
+async function checkInstanceStatus(instanceName) {
+  try {
+    console.log(`Checking status for instance: ${instanceName}`);
     const response = await fetch(`${evolutionApiUrl}/instance/connectionState/${instanceName}`, {
       headers: {
-        'apikey': evolutionApiKey,
-      },
+        'apikey': evolutionApiKey
+      }
     });
-
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error('Instance not found');
       }
       throw new Error('Failed to check instance status');
     }
-
     const data = await response.json();
-    return data.instance?.state === 'open' ? 'connected' : 'disconnected';
+    const status = data.instance?.state === 'open' ? 'connected' : 'disconnected';
+    console.log(`Instance ${instanceName} status: ${status}`);
+    return status;
   } catch (error) {
     console.error('Error checking instance status:', error);
     throw error;
   }
 }
-
-async function refreshQrCode(instanceName: string) {
+async function refreshQrCode(instanceName) {
   try {
     console.log(`Attempting to refresh QR code for instance: ${instanceName}`);
-
     const response = await fetch(`${evolutionApiUrl}/instance/connect/${instanceName}`, {
       headers: {
-        'apikey': evolutionApiKey,
-      },
+        'apikey': evolutionApiKey
+      }
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Failed to refresh QR code for ${instanceName}:`, errorText);
       throw new Error('Failed to refresh QR code');
     }
-
     const data = await response.json();
-    console.log('Refresh QR code response:', data);
-
-    // ✅ CORREÇÃO: Verificar múltiplos formatos possíveis do QR code
+    console.log('Refresh QR code response:', JSON.stringify(data, null, 2));
+    // Verificar múltiplos formatos possíveis do QR code
     let qrCode = null;
-
     if (data.qrcode && data.qrcode.base64) {
       qrCode = data.qrcode.base64;
     } else if (data.qrcode && typeof data.qrcode === 'string') {
@@ -67,304 +96,302 @@ async function refreshQrCode(instanceName: string) {
     } else if (data.qr && data.qr.base64) {
       qrCode = data.qr.base64;
     }
-
     console.log('QR Code extracted:', qrCode ? 'success' : 'null');
     return qrCode;
   } catch (error) {
     console.error('Error refreshing QR code:', error);
-    return null;
+    throw error;
   }
 }
-
-async function createEvolutionInstance(userId: string, userEmail: string) {
+async function createEvolutionInstance(userId, userEmail) {
   try {
+    // ✅ CORREÇÃO: Usar apenas o nome do usuário sem caracteres especiais
     const instanceName = `tssaas-${userEmail}`;
-
+    console.log(`Creating Evolution instance: ${instanceName}`);
+    console.log(`Evolution API URL: ${evolutionApiUrl}`);
+    console.log(`Evolution API Key: ${evolutionApiKey ? 'SET' : 'NOT SET'}`);
+    // ✅ MELHORADO: Payload mais simples para evitar erros
+    const payload = {
+      instanceName,
+      qrcode: true,
+      integration: 'WHATSAPP-BAILEYS'
+    };
+    console.log('Create payload:', JSON.stringify(payload, null, 2));
     const createResponse = await fetch(`${evolutionApiUrl}/instance/create`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': evolutionApiKey,
+        'apikey': evolutionApiKey
       },
-      body: JSON.stringify({
-        instanceName,
-        qrcode: true,
-        integration: 'WHATSAPP-BAILEYS',
-        token: evolutionApiKey,
-        webhook: {
-          url: `${supabaseUrl}/functions/v1/whatsapp-webhook`,
-          events: ['messages.upsert'],
-          webhook_by_events: true
-        }
-      }),
+      body: JSON.stringify(payload)
     });
-
+    console.log(`Create response status: ${createResponse.status}`);
     if (!createResponse.ok) {
       const errorText = await createResponse.text();
-      console.error('Evolution API create error:', errorText);
-      throw new Error('Failed to create Evolution instance');
+      console.error('Evolution API create error response:', errorText);
+      // ✅ ADICIONADO: Detalhes específicos do erro
+      let errorMessage = 'Failed to create Evolution instance';
+      if (createResponse.status === 401) {
+        errorMessage = 'Invalid API key for Evolution API';
+      } else if (createResponse.status === 404) {
+        errorMessage = 'Evolution API endpoint not found';
+      } else if (createResponse.status === 409) {
+        errorMessage = 'Instance already exists';
+      } else if (createResponse.status >= 500) {
+        errorMessage = 'Evolution API server error';
+      }
+      throw new Error(`${errorMessage} (Status: ${createResponse.status})`);
     }
-
     const createData = await createResponse.json();
-    console.log('Evolution API create response:', createData);
-
-    // ✅ CORREÇÃO: Tentar usar o QR code da resposta de criação primeiro
+    console.log('Evolution API create success response:', JSON.stringify(createData, null, 2));
+    // Extrair QR code da resposta
     let qrCode = null;
-
-    // Opção 1: QR code diretamente da resposta de criação
     if (createData.qrcode && createData.qrcode.base64) {
       qrCode = createData.qrcode.base64;
       console.log('QR Code obtained from create response');
-    }
-    // Opção 2: QR code em formato alternativo
-    else if (createData.qrcode && typeof createData.qrcode === 'string') {
+    } else if (createData.qrcode && typeof createData.qrcode === 'string') {
       qrCode = createData.qrcode;
       console.log('QR Code obtained from create response (string format)');
-    }
-    // Opção 3: Buscar QR code com delay após criação
-    else {
+    } else if (createData.base64) {
+      qrCode = createData.base64;
+      console.log('QR Code obtained from base64 field');
+    } else if (createData.qr && createData.qr.base64) {
+      qrCode = createData.qr.base64;
+      console.log('QR Code obtained from qr.base64 field');
+    } else {
       console.log('QR Code not in create response, trying to fetch after delay...');
-
       // Aguardar um pouco para a instância ficar pronta
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      qrCode = await refreshQrCode(instanceName);
-      console.log('QR Code obtained from refresh:', qrCode ? 'success' : 'null');
+      await new Promise((resolve)=>setTimeout(resolve, 3000));
+      try {
+        qrCode = await refreshQrCode(instanceName);
+        console.log('QR Code obtained from refresh:', qrCode ? 'success' : 'null');
+      } catch (refreshError) {
+        console.error('Failed to refresh QR code after creation:', refreshError);
+      // Não falhar a criação por causa do QR code
+      }
     }
-
-    const { error: insertError } = await supabase
-      .from('evolution_instances')
-      .insert([{
-        user_id: userId,  // ✅ Corrigido
+    console.log('Inserting instance into database...');
+    const { error: insertError } = await supabase.from('evolution_instances').insert([
+      {
+        user_id: userId,
         instance_name: instanceName,
         qr_code: qrCode,
-        status: 'created',
-      }]);
-
+        status: 'created'
+      }
+    ]);
     if (insertError) {
       console.error('Database insertion error:', insertError);
       throw new Error('Failed to store instance information');
     }
-
-    return { success: true, instanceName, qrCode };
+    console.log('Instance created successfully');
+    return {
+      success: true,
+      instanceName,
+      qrCode
+    };
   } catch (error) {
     console.error('Error creating Evolution instance:', error);
     throw error;
   }
 }
-
-async function deleteEvolutionInstance(instanceName: string) {
+async function deleteEvolutionInstance(instanceName) {
   try {
+    console.log(`Deleting Evolution instance: ${instanceName}`);
     const response = await fetch(`${evolutionApiUrl}/instance/delete/${instanceName}`, {
       method: 'DELETE',
       headers: {
-        'apikey': evolutionApiKey,
-      },
+        'apikey': evolutionApiKey
+      }
     });
-
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Failed to delete instance ${instanceName}:`, errorText);
       throw new Error('Failed to delete Evolution instance');
     }
-
+    console.log(`Instance ${instanceName} deleted successfully`);
     return true;
   } catch (error) {
     console.error('Error deleting Evolution instance:', error);
     throw error;
   }
 }
-
-Deno.serve(async (req) => {
+Deno.serve(async (req)=>{
   if (req.method === 'OPTIONS') {
     return new Response(null, {
-      headers: corsHeaders,
+      headers: corsHeaders
     });
   }
-
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       throw new Error('No authorization header');
     }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
-
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
     if (authError || !user) {
       throw new Error('Invalid authorization');
     }
-
+    console.log(`Request from user: ${user.email}`);
     // Handle DELETE request
     if (req.method === 'DELETE') {
-      const { data: existingInstance } = await supabase
-        .from('evolution_instances')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
+      const { data: existingInstance } = await supabase.from('evolution_instances').select('*').eq('user_id', user.id).single();
       if (!existingInstance) {
         throw new Error('No instance found');
       }
-
       await deleteEvolutionInstance(existingInstance.instance_name);
-
-      const { error: deleteError } = await supabase
-        .from('evolution_instances')
-        .delete()
-        .eq('user_id', user.id);
-
+      const { error: deleteError } = await supabase.from('evolution_instances').delete().eq('user_id', user.id);
       if (deleteError) {
         throw new Error('Failed to delete instance record');
       }
-
-      return new Response(
-        JSON.stringify({ success: true }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      return new Response(JSON.stringify({
+        success: true
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
         }
-      );
+      });
     }
-
     // Handle POST request (create or refresh)
     if (req.method === 'POST') {
       const body = await req.json();
-
+      console.log('POST request body:', JSON.stringify(body, null, 2));
       if (body.type === 'create') {
         // Create new instance
-        const result = await createEvolutionInstance(user.id, user.email!);
-
-        return new Response(
-          JSON.stringify(result),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        const result = await createEvolutionInstance(user.id, user.email);
+        return new Response(JSON.stringify(result), {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
           }
-        );
+        });
       }
-
       if (body.type === 'refresh') {
         // Refresh QR code for existing instance
-        const { data: existingInstance } = await supabase
-          .from('evolution_instances')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-
+        const { data: existingInstance } = await supabase.from('evolution_instances').select('*').eq('user_id', user.id).single();
         if (!existingInstance) {
           throw new Error('No instance found');
         }
-
         const qrCode = await refreshQrCode(existingInstance.instance_name);
-
-        const { error: updateError } = await supabase
-          .from('evolution_instances')
-          .update({
-            qr_code: qrCode,
-          })
-          .eq('id', existingInstance.id);
-
+        const { error: updateError } = await supabase.from('evolution_instances').update({
+          qr_code: qrCode
+        }).eq('id', existingInstance.id);
         if (updateError) {
           console.error('Database update error:', updateError);
           throw new Error('Failed to update QR code');
         }
-
-        return new Response(
-          JSON.stringify({ ...existingInstance, qr_code: qrCode }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        return new Response(JSON.stringify({
+          ...existingInstance,
+          qr_code: qrCode
+        }), {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
           }
-        );
+        });
       }
     }
-
     // Handle GET request (check status and update)
-    const { data: existingInstance } = await supabase
-      .from('evolution_instances')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
+    const { data: existingInstance } = await supabase.from('evolution_instances').select('*').eq('user_id', user.id).single();
     if (existingInstance) {
       try {
         const currentStatus = await checkInstanceStatus(existingInstance.instance_name);
-
-        const updateData: any = {
-          status: currentStatus,
+        const updateData = {
+          status: currentStatus
         };
-
-        // If disconnected and no QR code, try to get one
-        if (currentStatus === 'disconnected' && !existingInstance.qr_code) {
-          const qrCode = await refreshQrCode(existingInstance.instance_name);
-          if (qrCode) {
-            updateData.qr_code = qrCode;
+        // ✅ ADICIONADO: Buscar e salvar JID quando conectado
+        if (currentStatus === 'connected' && !existingInstance.jid) {
+          console.log(`Instance ${existingInstance.instance_name} is connected, fetching JID...`);
+          const jid = await fetchInstanceJid(existingInstance.instance_name);
+          if (jid) {
+            console.log(`JID found for ${existingInstance.instance_name}: ${jid}`);
+            updateData.jid = jid;
           }
         }
-
-        // Always update status in database if it changed
-        if (currentStatus !== existingInstance.status || updateData.qr_code) {
-          const { error: updateError } = await supabase
-            .from('evolution_instances')
-            .update(updateData)
-            .eq('id', existingInstance.id);
-
+        // ✅ ADICIONADO: Também tentar buscar JID se não temos mas a API pode ter
+        if (!existingInstance.jid) {
+          console.log(`No JID stored, attempting to fetch from API...`);
+          const jid = await fetchInstanceJid(existingInstance.instance_name);
+          if (jid) {
+            console.log(`JID found and will be stored: ${jid}`);
+            updateData.jid = jid;
+          }
+        }
+        // If disconnected and no QR code, try to get one
+        if (currentStatus === 'disconnected' && !existingInstance.qr_code) {
+          try {
+            const qrCode = await refreshQrCode(existingInstance.instance_name);
+            if (qrCode) {
+              updateData.qr_code = qrCode;
+            }
+          } catch (qrError) {
+            console.error('Failed to refresh QR code in GET request:', qrError);
+          // Não falhar por causa do QR code
+          }
+        }
+        // Always update status in database if it changed or if we have new data
+        if (currentStatus !== existingInstance.status || updateData.qr_code || updateData.jid) {
+          const { error: updateError } = await supabase.from('evolution_instances').update(updateData).eq('id', existingInstance.id);
           if (updateError) {
             console.error('Database update error:', updateError);
           }
         }
-
-        return new Response(
-          JSON.stringify({ ...existingInstance, ...updateData }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        return new Response(JSON.stringify({
+          ...existingInstance,
+          ...updateData
+        }), {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
           }
-        );
-
+        });
       } catch (error) {
         if (error instanceof Error && error.message === 'Instance not found') {
           // If instance doesn't exist in Evolution API but exists in our database,
           // delete the database record and return 404
-          const { error: deleteError } = await supabase
-            .from('evolution_instances')
-            .delete()
-            .eq('user_id', user.id);
-
+          const { error: deleteError } = await supabase.from('evolution_instances').delete().eq('user_id', user.id);
           if (deleteError) {
             console.error('Database deletion error:', deleteError);
           }
-
-          return new Response(
-            JSON.stringify({ error: 'Instance not found' }),
-            {
-              status: 404,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          return new Response(JSON.stringify({
+            error: 'Instance not found'
+          }), {
+            status: 404,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
             }
-          );
+          });
         }
-
         // For other errors, return the existing instance data
-        return new Response(
-          JSON.stringify(existingInstance),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        console.error('Error in GET request:', error);
+        return new Response(JSON.stringify(existingInstance), {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
           }
-        );
+        });
       }
     }
-
-    return new Response(
-      JSON.stringify({ message: 'No instance found' }),
-      {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    return new Response(JSON.stringify({
+      message: 'No instance found'
+    }), {
+      status: 404,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
       }
-    );
+    });
   } catch (error) {
-    console.error('Error:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      {
-        status: error instanceof Error && error.message === 'Instance not found' ? 404 : 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    console.error('Error in main handler:', error);
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: error instanceof Error ? error.stack : undefined
+    }), {
+      status: error instanceof Error && error.message === 'Instance not found' ? 404 : 400,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
       }
-    );
+    });
   }
 });
