@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Shield, Key, Edit, Save, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -21,6 +21,15 @@ function Users() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordUser, setPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState('');
+
+
+  // Em qualquer componente React:
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('JWT Token:', session.access_token);
+    });
+  }, []);
+
 
   // Verificar se o usuário atual é admin
   if (currentUser?.role !== 'admin') {

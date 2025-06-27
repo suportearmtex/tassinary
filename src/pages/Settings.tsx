@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
+import ApiKeysManager from '../components/ApiKeysManager';
 
 function Settings() {
   const [isConnecting, setIsConnecting] = useState(false);
@@ -221,27 +222,10 @@ function Settings() {
           </div>
 
           {/* Debug Information (apenas em desenvolvimento) */}
-          {import.meta.env.DEV && (
-            <div className="p-6 bg-gray-50 dark:bg-gray-900">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-gray-400 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Informações de Debug
-                  </h4>
-                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                    <p>User ID: {user?.id || 'N/A'}</p>
-                    <p>Google Client ID: {import.meta.env.VITE_GOOGLE_CLIENT_ID ? '✓ Configurado' : '✗ Não configurado'}</p>
-                    <p>Supabase URL: {import.meta.env.VITE_SUPABASE_URL ? '✓ Configurado' : '✗ Não configurado'}</p>
-                    <p>Token Google: {googleToken ? '✓ Existe' : '✗ Não existe'}</p>
-                    <p>Callback URL: {`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/handle_google_oauth`}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          
         </div>
       </div>
+          <ApiKeysManager />
 
       {/* Disconnect Confirmation Modal */}
       {isDisconnectModalOpen && (

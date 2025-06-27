@@ -39,7 +39,7 @@ async function checkInstanceStatus(instanceName: string) {
 async function refreshQrCode(instanceName: string) {
   try {
     console.log(`Attempting to refresh QR code for instance: ${instanceName}`);
-    
+
     const response = await fetch(`${evolutionApiUrl}/instance/connect/${instanceName}`, {
       headers: {
         'apikey': evolutionApiKey,
@@ -57,7 +57,7 @@ async function refreshQrCode(instanceName: string) {
 
     // ✅ CORREÇÃO: Verificar múltiplos formatos possíveis do QR code
     let qrCode = null;
-    
+
     if (data.qrcode && data.qrcode.base64) {
       qrCode = data.qrcode.base64;
     } else if (data.qrcode && typeof data.qrcode === 'string') {
@@ -78,8 +78,8 @@ async function refreshQrCode(instanceName: string) {
 
 async function createEvolutionInstance(userId: string, userEmail: string) {
   try {
-    const instanceName = `tssaas-${userEmail.split('@')[0]}`;
-    
+    const instanceName = `tssaas-${userEmail}`;
+
     const createResponse = await fetch(`${evolutionApiUrl}/instance/create`, {
       method: 'POST',
       headers: {
@@ -91,6 +91,11 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
         qrcode: true,
         integration: 'WHATSAPP-BAILEYS',
         token: evolutionApiKey,
+        webhook: {
+          url: `${supabaseUrl}/functions/v1/whatsapp-webhook`,
+          events: ['messages.upsert'],
+          webhook_by_events: true
+        }
       }),
     });
 
@@ -105,7 +110,7 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
 
     // ✅ CORREÇÃO: Tentar usar o QR code da resposta de criação primeiro
     let qrCode = null;
-    
+
     // Opção 1: QR code diretamente da resposta de criação
     if (createData.qrcode && createData.qrcode.base64) {
       qrCode = createData.qrcode.base64;
@@ -119,10 +124,10 @@ async function createEvolutionInstance(userId: string, userEmail: string) {
     // Opção 3: Buscar QR code com delay após criação
     else {
       console.log('QR Code not in create response, trying to fetch after delay...');
-      
+
       // Aguardar um pouco para a instância ficar pronta
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       qrCode = await refreshQrCode(instanceName);
       console.log('QR Code obtained from refresh:', qrCode ? 'success' : 'null');
     }
@@ -223,11 +228,11 @@ Deno.serve(async (req) => {
     // Handle POST request (create or refresh)
     if (req.method === 'POST') {
       const body = await req.json();
-      
+
       if (body.type === 'create') {
         // Create new instance
         const result = await createEvolutionInstance(user.id, user.email!);
-        
+
         return new Response(
           JSON.stringify(result),
           {
@@ -235,7 +240,7 @@ Deno.serve(async (req) => {
           }
         );
       }
-      
+
       if (body.type === 'refresh') {
         // Refresh QR code for existing instance
         const { data: existingInstance } = await supabase
@@ -249,7 +254,7 @@ Deno.serve(async (req) => {
         }
 
         const qrCode = await refreshQrCode(existingInstance.instance_name);
-        
+
         const { error: updateError } = await supabase
           .from('evolution_instances')
           .update({
@@ -281,7 +286,7 @@ Deno.serve(async (req) => {
     if (existingInstance) {
       try {
         const currentStatus = await checkInstanceStatus(existingInstance.instance_name);
-        
+
         const updateData: any = {
           status: currentStatus,
         };

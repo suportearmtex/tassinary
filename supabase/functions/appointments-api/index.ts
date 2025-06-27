@@ -9,7 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-action',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-action, x-api-key',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
@@ -102,24 +102,104 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verificar autenticação
+    // 🔐 AUTENTICAÇÃO HÍBRIDA: JWT ou API Key
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Token de autorização necessário');
-    }
+    const apiKeyHeader = req.headers.get('X-API-Key');
+    
+    let user: any = null;
 
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
+    console.log('Headers recebidos:', {
+      hasAuth: !!authHeader,
+      hasApiKey: !!apiKeyHeader,
+      apiKeyPrefix: apiKeyHeader ? apiKeyHeader.substring(0, 10) + '...' : null
+    });
 
-    if (authError || !user) {
-      throw new Error('Usuário não autenticado');
+    if (apiKeyHeader) {
+      console.log('🔑 Tentando autenticar com API key:', apiKeyHeader.substring(0, 10) + '...');
+      
+      // Autenticação via API Key (para n8n) - VERSÃO SIMPLIFICADA
+      const { data: apiKeyData, error: apiKeyError } = await supabase
+        .from('user_api_keys')
+        .select('user_id, usage_count')
+        .eq('api_key', apiKeyHeader)
+        .eq('is_active', true)
+        .single();
+
+      console.log('Resultado da busca API key:', { 
+        found: !!apiKeyData, 
+        error: apiKeyError?.message,
+        userId: apiKeyData?.user_id 
+      });
+
+      if (apiKeyError || !apiKeyData) {
+        console.error('❌ API key não encontrada ou inativa:', apiKeyError);
+        throw new Error('API Key inválida ou inativa');
+      }
+
+      // Buscar dados do usuário separadamente
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, email')
+        .eq('id', apiKeyData.user_id)
+        .single();
+
+      if (userError || !userData) {
+        console.log('ℹ️ Usuário não encontrado na tabela users, usando dados básicos');
+        // Se não encontrar na tabela users, usar dados básicos
+        user = {
+          id: apiKeyData.user_id,
+          email: `user-${apiKeyData.user_id}@system.local`
+        };
+      } else {
+        user = userData;
+      }
+
+      // Atualizar estatísticas de uso
+      try {
+        await supabase
+          .from('user_api_keys')
+          .update({ 
+            last_used_at: new Date().toISOString(),
+            usage_count: apiKeyData.usage_count + 1
+          })
+          .eq('api_key', apiKeyHeader);
+      } catch (updateError) {
+        console.warn('⚠️ Erro ao atualizar estatísticas da API key:', updateError);
+      }
+
+      console.log('✅ Usuário autenticado via API key:', user.id);
+
+    } else if (authHeader) {
+      console.log('🎫 Tentando autenticar com JWT');
+      
+      // Autenticação via JWT (usuário normal)
+      if (!authHeader.startsWith('Bearer ')) {
+        throw new Error('Formato de token inválido. Use: Bearer <token>');
+      }
+
+      const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
+      const { data: { user: jwtUser }, error: authError } = await supabaseUser.auth.getUser(
+        authHeader.replace('Bearer ', '')
+      );
+
+      if (authError || !jwtUser) {
+        console.error('❌ Token JWT inválido:', authError);
+        throw new Error('Token JWT inválido ou expirado');
+      }
+
+      user = jwtUser;
+      console.log('✅ Usuário autenticado via JWT:', user.id);
+      
+    } else {
+      console.error('❌ Nenhum método de autenticação fornecido');
+      throw new Error('Autenticação necessária. Use Authorization: Bearer <token> ou X-API-Key: <api_key>');
     }
 
     // Pegar ação do header ou URL
     const url = new URL(req.url);
     const action = req.headers.get('x-action') || url.searchParams.get('action');
+
+    console.log(`🎯 Executando ação: ${action} para usuário: ${user.id}`);
 
     // 🔥 ROTEAMENTO POR AÇÃO
     switch (action) {
@@ -162,6 +242,8 @@ Deno.serve(async (req) => {
 
           const { data: appointments, error } = await query;
           if (error) throw new Error(`Erro ao consultar agendamentos: ${error.message}`);
+
+          console.log(`📋 Encontrados ${appointments.length} agendamentos`);
 
           return new Response(JSON.stringify({
             success: true,
@@ -555,7 +637,7 @@ Deno.serve(async (req) => {
     }
 
   } catch (error) {
-    console.error('Erro na API de agendamentos:', error);
+    console.error('❌ Erro na API de agendamentos:', error);
     return new Response(JSON.stringify({
       success: false,
       error: error.message || 'Erro interno do servidor'
