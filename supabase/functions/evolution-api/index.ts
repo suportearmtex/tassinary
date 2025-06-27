@@ -3,6 +3,7 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL');
 const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+const n8nWebhookUrl = Deno.env.get('N8N_WEBHOOK_URL'); // ✅ ADICIONADO: Webhook do N8N
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -110,11 +111,25 @@ async function createEvolutionInstance(userId, userEmail) {
     console.log(`Creating Evolution instance: ${instanceName}`);
     console.log(`Evolution API URL: ${evolutionApiUrl}`);
     console.log(`Evolution API Key: ${evolutionApiKey ? 'SET' : 'NOT SET'}`);
-    // ✅ MELHORADO: Payload mais simples para evitar erros
+    console.log(`N8N Webhook URL: ${n8nWebhookUrl ? 'SET' : 'NOT SET'}`);
+    // ✅ ATUALIZADO: Payload com webhook N8N configurado
     const payload = {
       instanceName,
       qrcode: true,
-      integration: 'WHATSAPP-BAILEYS'
+      integration: 'WHATSAPP-BAILEYS',
+      // ✅ ADICIONADO: Configuração do webhook para N8N
+      webhook: {
+        url: n8nWebhookUrl,
+        events: [
+          'MESSAGES_UPSERT'
+        ],
+        byEvents: false,
+        base64: true,
+        headers: {
+          "autorization": `Bearer ${evolutionApiKey}`,
+          "Content-Type": "application/json"
+        }
+      }
     };
     console.log('Create payload:', JSON.stringify(payload, null, 2));
     const createResponse = await fetch(`${evolutionApiUrl}/instance/create`, {
@@ -183,7 +198,10 @@ async function createEvolutionInstance(userId, userEmail) {
       console.error('Database insertion error:', insertError);
       throw new Error('Failed to store instance information');
     }
-    console.log('Instance created successfully');
+    console.log('Instance created successfully with N8N webhook configured');
+    console.log(`Webhook URL: ${n8nWebhookUrl}`);
+    console.log('Webhook events: messages.upsert');
+    console.log('Webhook base64: enabled');
     return {
       success: true,
       instanceName,
