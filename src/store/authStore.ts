@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 
 interface User {
   id: string;
+  full_name?:string;
   email: string;
   full_name: string | null;
   role: 'admin' | 'professional' | 'receptionist';
@@ -14,7 +15,8 @@ interface AuthState {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  initializeAuth: () => Promise<void>;
+
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -29,36 +31,56 @@ export const useAuthStore = create<AuthState>()(
         });
         if (error) throw error;
         
-        // Buscar dados do perfil do usuário
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-        
-        if (profileError) throw profileError;
-        
-        set({ user: profile as User });
+        // Buscar role do usuário usando RPC para evitar recursão RLS
+        const { data: userRole, error: roleError } = await supabase
+          .rpc('get_user_role');
+
+        if (roleError) throw roleError;
+
+        // Construir objeto do usuário com dados da auth e role do banco
+        const userData = {
+          id: data.user.id,
+          email: data.user.email || '',
+          role: userRole
+        };
+
+        set({ user: userData, loading: false });
+
       },
       signOut: async () => {
         await supabase.auth.signOut();
         set({ user: null });
       },
-      refreshUser: async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          set({ user: null });
-          return;
-        }
-        
-        const { data: profile, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (!error && profile) {
-          set({ user: profile as User });
+      initializeAuth: async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session?.user) {
+            // Buscar role do usuário usando RPC para evitar recursão RLS
+            const { data: userRole, error: roleError } = await supabase
+              .rpc('get_user_role');
+
+            if (roleError) {
+              console.error('Erro ao buscar role do usuário:', roleError);
+              set({ user: null, loading: false });
+              return;
+            }
+
+            // Construir objeto do usuário com dados da auth e role do banco
+            const userData = {
+              id: session.user.id,
+              email: session.user.email || '',
+              role: userRole
+            };
+
+            set({ user: userData, loading: false });
+          } else {
+            set({ user: null, loading: false });
+          }
+        } catch (error) {
+          console.error('Erro ao inicializar auth:', error);
+          set({ user: null, loading: false });
+
         }
       },
     }),

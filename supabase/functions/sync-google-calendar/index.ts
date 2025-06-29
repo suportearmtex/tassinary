@@ -28,7 +28,8 @@ async function refreshGoogleToken(refreshToken: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to refresh token');
+    const errorData = await response.json();
+    throw new Error(`Failed to refresh token: ${errorData.error_description || errorData.error}`);
   }
 
   const data = await response.json();
@@ -43,27 +44,54 @@ async function syncAppointmentToGoogle(
   accessToken: string,
   operation: 'create' | 'update' | 'delete'
 ) {
-  // Calculate start and end times in the correct format
+  // Validação para operações que requerem google_event_id
+  if ((operation === 'update' || operation === 'delete') && !appointment.google_event_id) {
+    throw new Error(`Google event ID is required for ${operation} operation`);
+  }
+
+  // Para operações de delete, só precisamos do ID
+  if (operation === 'delete') {
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${appointment.google_event_id}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok && response.status !== 404) {
+      const errorData = await response.json();
+      throw new Error(`Failed to delete event: ${errorData?.error?.message || 'Unknown error'}`);
+    }
+
+    return null;
+  }
+
+  // Calcular horários para create/update
   const startDateTime = `${appointment.date}T${appointment.time}:00`;
-  const endDateTime = new Date(`${appointment.date}T${appointment.time}`);
-  endDateTime.setMinutes(endDateTime.getMinutes() + appointment.service_details.duration);
+  const startDate = new Date(`${appointment.date}T${appointment.time}`);
   
-  const formattedEndTime = endDateTime.toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+  // Verificar se service_details existe e tem duration
+  if (!appointment.service_details || !appointment.service_details.duration) {
+    throw new Error('Service details with duration are required');
+  }
+
+  const endDate = new Date(startDate);
+  endDate.setMinutes(endDate.getMinutes() + parseInt(appointment.service_details.duration));
+  
+  const endDateTime = endDate.toISOString().substring(0, 19);
 
   const eventData = {
-    summary: `${appointment.client.name} - ${appointment.service_details.name}`,
-    description: `Agendamento via Agenda Pro\n\nCliente: ${appointment.client.name}\nServiço: ${appointment.service_details.name}\nDuração: ${appointment.service_details.duration} minutos`,
+    summary: `${appointment.client?.name || 'Cliente'} - ${appointment.service_details.name}`,
+    description: `Agendamento via Agenda Pro\n\nCliente: ${appointment.client?.name || 'Nome não informado'}\nServiço: ${appointment.service_details.name}\nDuração: ${appointment.service_details.duration} minutos\nPreço: R$ ${appointment.price || '0,00'}`,
     start: {
       dateTime: startDateTime,
       timeZone: 'America/Sao_Paulo',
     },
     end: {
-      dateTime: `${appointment.date}T${formattedEndTime}`,
+      dateTime: endDateTime,
       timeZone: 'America/Sao_Paulo',
     },
   };
@@ -92,21 +120,33 @@ async function syncAppointmentToGoogle(
         body: JSON.stringify(eventData),
       });
       break;
-
-    case 'delete':
-      response = await fetch(`${baseUrl}/${appointment.google_event_id}`, {
-        method: 'DELETE',
-        headers,
-      });
-      break;
   }
 
   if (!response?.ok) {
     const errorData = await response?.json();
+    
+    // Se for erro 404 no update, tentar recriar o evento
+    if (operation === 'update' && response?.status === 404) {
+      console.log('Event not found on Google Calendar, creating new one...');
+      
+      // Criar novo evento
+      const createResponse = await fetch(baseUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(eventData),
+      });
+
+      if (!createResponse.ok) {
+        const createErrorData = await createResponse.json();
+        throw new Error(`Failed to recreate event: ${createErrorData?.error?.message || 'Unknown error'}`);
+      }
+
+      return createResponse.json();
+    }
+
     throw new Error(`Failed to ${operation} event in Google Calendar: ${errorData?.error?.message || 'Unknown error'}`);
   }
 
-  if (operation === 'delete') return null;
   return response.json();
 }
 
@@ -117,6 +157,16 @@ Deno.serve(async (req) => {
 
   try {
     const { appointment, operation } = await req.json();
+    
+    // Validação básica
+    if (!appointment || !operation) {
+      throw new Error('Missing appointment or operation parameter');
+    }
+
+    if (!['create', 'update', 'delete'].includes(operation)) {
+      throw new Error('Invalid operation. Must be create, update, or delete');
+    }
+
     const authHeader = req.headers.get('Authorization');
     
     if (!authHeader) {
@@ -145,6 +195,8 @@ Deno.serve(async (req) => {
     // Check if token needs refresh
     let accessToken = tokenData.access_token;
     if (new Date(tokenData.expires_at) <= new Date()) {
+      console.log('Token expired, refreshing...');
+      
       const { accessToken: newToken, expiresIn } = await refreshGoogleToken(
         tokenData.refresh_token
       );
@@ -164,6 +216,7 @@ Deno.serve(async (req) => {
         .eq('user_id', user.id);
 
       if (updateError) {
+        console.error('Failed to update token:', updateError);
         throw new Error('Failed to update token');
       }
     }
@@ -175,8 +228,8 @@ Deno.serve(async (req) => {
       operation
     );
 
-    // Update appointment with Google event ID if created
-    if (operation === 'create' && result?.id) {
+    // Update appointment with Google event ID if created or recreated
+    if ((operation === 'create' || (operation === 'update' && result?.id)) && result?.id) {
       const { error: updateError } = await supabase
         .from('appointments')
         .update({
@@ -186,12 +239,28 @@ Deno.serve(async (req) => {
         .eq('id', appointment.id);
 
       if (updateError) {
+        console.error('Failed to update appointment with Google event ID:', updateError);
         throw new Error('Failed to update appointment with Google event ID');
       }
     }
 
+    // Se for delete, marcar como não sincronizado
+    if (operation === 'delete') {
+      const { error: updateError } = await supabase
+        .from('appointments')
+        .update({
+          google_event_id: null,
+          is_synced_to_google: false,
+        })
+        .eq('id', appointment.id);
+
+      if (updateError) {
+        console.error('Failed to update appointment sync status:', updateError);
+      }
+    }
+
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, result }),
       {
         headers: {
           ...corsHeaders,
@@ -200,6 +269,7 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
+    console.error('Sync error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {

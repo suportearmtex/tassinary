@@ -1,8 +1,8 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Appointments from './pages/Appointments';
@@ -14,17 +14,28 @@ import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { useAuthStore } from './store/authStore';
+import Users from './pages/Users';
 
 const queryClient = new QueryClient();
 
 function App() {
-  const user = useAuthStore((state) => state.user);
-  const loading = useAuthStore((state) => state.loading);
 
+  const { user, loading, initializeAuth } = useAuthStore();
+
+  // Inicializar autenticação ao carregar a aplicação
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  // Mostrar loading enquanto verifica autenticação
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Carregando...</p>
+        </div>
+
       </div>
     );
   }
@@ -54,9 +65,9 @@ function App() {
               <Route path="/services" element={<Services />} />
               <Route path="/whatsapp" element={<WhatsApp />} />
               <Route path="/settings" element={<Settings />} />
-              {user.role === 'admin' && (
-                <Route path="/admin" element={<Admin />} />
-              )}
+
+              <Route path="/users" element={<Users />} />
+
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>

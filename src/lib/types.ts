@@ -6,7 +6,17 @@ export interface Client {
   created_at: string;
   updated_at: string;
 }
-
+export interface ApiKey {
+  id: string;
+  user_id: string;
+  api_key: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+  usage_count: number;
+}
 export interface Service {
   id: string;
   name: string;
@@ -15,7 +25,6 @@ export interface Service {
   created_at: string;
   updated_at: string;
 }
-
 export interface Appointment {
   id: string;
   client_id: string;
@@ -25,7 +34,7 @@ export interface Appointment {
   time: string;
   price: number;
   status: 'pending' | 'confirmed' | 'cancelled';
-  google_event_id?: string;
+  google_event_id?: string | null; // CORRIGIDO: permitir null
   is_synced_to_google: boolean;
   created_at: string;
   updated_at: string;
@@ -37,7 +46,6 @@ export interface Appointment {
     cancellation?: boolean;
   };
 }
-
 export interface MessageTemplate {
   id: string;
   type: 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'cancellation';
@@ -51,6 +59,7 @@ export interface EvolutionInstance {
   user_id: string;
   instance_name: string;
   qr_code: string | null;
+  jid: string | null; // ✅ ADICIONADO: Campo para armazenar o JID do WhatsApp
   status: string;
   created_at: string;
   updated_at: string;

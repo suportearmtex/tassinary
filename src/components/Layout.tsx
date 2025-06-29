@@ -1,204 +1,266 @@
-import React, { useState, ReactNode } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Bell,
   Calendar,
-  ChevronDown,
+  Users,
+  UserPlus,
+  Settings,
   LogOut,
   Menu,
-  MessageSquare,
-  Settings,
-  Users,
-  DollarSign,
   X,
-  Sun,
-  Moon,
+  MessageCircle,
+  Briefcase,
+  BarChart3,
   Shield,
+  Moon,
+  Sun
+
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 
 interface LayoutProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 function Layout({ children }: LayoutProps) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
-  const signOut = useAuthStore((state) => state.signOut);
-  const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
+  const { user, signOut } = useAuthStore();
   const { isDarkMode, toggleTheme } = useThemeStore();
 
-  const navItems = [
-    { id: '/', label: 'Dashboard', icon: Calendar },
-    { id: '/appointments', label: 'Agendamentos', icon: Calendar },
-    { id: '/clients', label: 'Clientes', icon: Users },
-    { id: '/services', label: 'Serviços', icon: DollarSign },
-    { id: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
-    { id: '/settings', label: 'Configurações', icon: Settings },
-  ];
+  // Aplicar tema escuro ao HTML
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
 
-  // Adicionar item de admin apenas para administradores
-  if (user?.role === 'admin') {
-    navItems.push({ id: '/admin', label: 'Administração', icon: Shield });
-  }
-
-  React.useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
 
-  const handleLogout = () => {
-    setIsLogoutModalOpen(true);
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
-  const confirmLogout = async () => {
-    await signOut();
-    setIsLogoutModalOpen(false);
+  const isActive = (path: string) => location.pathname === path;
+
+  const navigation = [
+    { name: 'Dashboard', href: '/', icon: BarChart3 },
+    { name: 'Agendamentos', href: '/appointments', icon: Calendar },
+    { name: 'Clientes', href: '/clients', icon: Users },
+    { name: 'Serviços', href: '/services', icon: Briefcase },
+    { name: 'WhatsApp', href: '/whatsapp', icon: MessageCircle },
+    { name: 'Configurações', href: '/settings', icon: Settings },
+  ];
+
+  // Adicionar link de usuários apenas para admins
+  if (user?.role === 'admin') {
+    navigation.splice(-1, 0, { name: 'Gerenciar Usuários', href: '/users', icon: Shield });
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'Administrador';
+      case 'professional':
+        return 'Profissional';
+      case 'receptionist':
+        return 'Recepcionista';
+      default:
+        return 'Usuário';
+    }
   };
 
-  const getRoleLabel = (role: string) => {
-    const labels = {
-      admin: 'Administrador',
-      professional: 'Profissional',
-      receptionist: 'Recepcionista',
-    };
-    return labels[role as keyof typeof labels] || role;
-  };
+  const NavItem = ({ item }: { item: typeof navigation[0] }) => (
+    <Link
+      to={item.href}
+      className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+        isActive(item.href)
+          ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-700'
+          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
+      }`}
+      onClick={() => setIsSidebarOpen(false)}
+    >
+      <item.icon className="mr-3 h-5 w-5" />
+      {item.name}
+    </Link>
+  );
 
-  const getRoleColor = (role: string) => {
-    const colors = {
-      admin: 'text-red-600 dark:text-red-400',
-      professional: 'text-blue-600 dark:text-blue-400',
-      receptionist: 'text-green-600 dark:text-green-400',
-    };
-    return colors[role as keyof typeof colors] || 'text-gray-600 dark:text-gray-400';
-  };
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm fixed w-full z-10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-            >
-              {isSidebarOpen ? (
-                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              ) : (
-                <Menu className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              )}
-            </button>
-            <h1 className="text-xl font-semibold text-gray-800 dark:text-white">Agenda Pro</h1>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Sidebar for desktop */}
+      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
+        <div className="flex flex-col flex-grow bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 pt-5 pb-4 overflow-y-auto">
+          <div className="flex items-center flex-shrink-0 px-4">
+            <div className="flex items-center">
+              <div className="bg-blue-600 p-2 rounded-lg">
+                <Calendar className="h-6 w-6 text-white" />
+              </div>
+              <span className="ml-3 text-xl font-bold text-gray-900 dark:text-white">
+                Agenda Pro
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+          
+          <div className="mt-8 flex-grow flex flex-col">
+            <nav className="flex-1 px-4 space-y-2">
+              {navigation.map((item) => (
+                <NavItem key={item.name} item={item} />
+              ))}
+            </nav>
+          </div>
+
+          <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                  <UserPlus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+              <div className="ml-3 flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {user?.full_name || user?.email}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {getRoleDisplayName(user?.role || 'professional')}
+                </p>
+              </div>
+              <button
+                onClick={toggleTheme}
+                className="ml-3 p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100 transition-colors"
+                title={isDarkMode ? 'Ativar modo claro' : 'Ativar modo escuro'}
+              >
+                {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="ml-3 p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100 transition-colors"
+                title="Sair"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile sidebar */}
+      <div className={`lg:hidden ${isSidebarOpen ? 'fixed inset-0 z-40' : ''}`}>
+        {isSidebarOpen && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setIsSidebarOpen(false)} />
+        )}
+        
+        <div className={`fixed inset-y-0 left-0 flex flex-col w-64 bg-white dark:bg-gray-800 transform transition-transform duration-300 ease-in-out z-50 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}>
+          <div className="flex items-center justify-between flex-shrink-0 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center">
+              <div className="bg-blue-600 p-2 rounded-lg">
+                <Calendar className="h-6 w-6 text-white" />
+              </div>
+              <span className="ml-3 text-xl font-bold text-gray-900 dark:text-white">
+                Agenda Pro
+              </span>
+            </div>
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+          
+          <div className="flex-1 flex flex-col overflow-y-auto">
+            <nav className="flex-1 px-4 py-6 space-y-2">
+              {navigation.map((item) => (
+                <NavItem key={item.name} item={item} />
+              ))}
+            </nav>
+
+            <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                    <UserPlus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+                <div className="ml-3 flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {user?.full_name || user?.email}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {getRoleDisplayName(user?.role || 'professional')}
+                  </p>
+                </div>
+                <button
+                  onClick={toggleTheme}
+                  className="ml-3 p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100 transition-colors"
+                  title={isDarkMode ? 'Ativar modo claro' : 'Ativar modo escuro'}
+                >
+                  {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                </button>
+                <button
+                  onClick={handleSignOut}
+                  className="ml-3 p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100 transition-colors"
+                  title="Sair"
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="lg:pl-64 flex flex-col flex-1">
+        {/* Top navigation for mobile */}
+        <div className="lg:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          <div className="flex items-center">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <Calendar className="h-5 w-5 text-white" />
+            </div>
+            <span className="ml-2 text-lg font-bold text-gray-900 dark:text-white">
+              Agenda Pro
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
             <button
               onClick={toggleTheme}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"
+              className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100"
+              title={isDarkMode ? 'Ativar modo claro' : 'Ativar modo escuro'}
             >
-              {isDarkMode ? (
-                <Sun className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              ) : (
-                <Moon className="w-5 h-5 text-gray-500" />
-              )}
+              {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
-            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full relative">
-              <Bell className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-            <div className="flex items-center gap-2">
-              <img
-                src="https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg"
-                alt="Profile"
-                className="w-8 h-8 rounded-full object-cover"
-              />
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {user?.full_name || user?.email}
-                </span>
-                <span className={`text-xs ${getRoleColor(user?.role || '')}`}>
-                  {getRoleLabel(user?.role || '')}
-                </span>
-              </div>
-              <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="p-2 hover:bg-red-50 dark:hover:bg-red-900 rounded-full"
+            <button
+              onClick={handleSignOut}
+              className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100"
+
             >
-              <LogOut className="w-5 h-5 text-red-500" />
+              <LogOut className="h-5 w-5" />
             </button>
           </div>
         </div>
-      </header>
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed left-0 top-[57px] h-[calc(100vh-57px)] bg-white dark:bg-gray-800 shadow-sm transition-all duration-300 ${
-          isSidebarOpen ? 'w-64' : 'w-16'
-        }`}
-      >
-        <nav className="p-4 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => navigate(item.id)}
-                title={!isSidebarOpen ? item.label : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  location.pathname === item.id
-                    ? 'bg-blue-50 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                } ${!isSidebarOpen ? 'justify-center' : ''}`}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                {isSidebarOpen && <span>{item.label}</span>}
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main
-        className={`pt-[73px] min-h-screen transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-16'
-        }`}
-      >
-        {children}
-      </main>
-
-      {/* Logout Confirmation Modal */}
-      {isLogoutModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Confirmar Logout
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Tem certeza que deseja sair do sistema?
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setIsLogoutModalOpen(false)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmLogout}
-                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
-              >
-                Confirmar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        {/* Page content */}
+        <main className="flex-1 p-4 lg:p-8">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
