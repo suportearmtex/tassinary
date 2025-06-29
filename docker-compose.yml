@@ -2,13 +2,13 @@ version: '3.8'
 
 services:
   tassinary-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: jvg/tassinary-app:latest
     restart: always
     environment:
-      - PORT=
+      - PORT=3000
       - NODE_ENV=production
+    ports:
+      - "3000:3000"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.tassinary-app.rule=Host(`tassinary.armtexai.org`)"
@@ -16,7 +16,6 @@ services:
       - "traefik.http.routers.tassinary-app.tls=true"
       - "traefik.http.routers.tassinary-app.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.tassinary-app.loadbalancer.server.port=3000"
-      # Optional: Redirect HTTP to HTTPS
       - "traefik.http.routers.tassinary-app-http.rule=Host(`tassinary.armtexai.org`)"
       - "traefik.http.routers.tassinary-app-http.entrypoints=web"
       - "traefik.http.routers.tassinary-app-http.middlewares=redirect-to-https"
