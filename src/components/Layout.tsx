@@ -14,6 +14,7 @@ import {
   Shield,
   Moon,
   Sun
+
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
@@ -36,6 +37,7 @@ function Layout({ children }: LayoutProps) {
     } else {
       document.documentElement.classList.remove('dark');
     }
+
   }, [isDarkMode]);
 
   const handleSignOut = async () => {
@@ -90,6 +92,7 @@ function Layout({ children }: LayoutProps) {
       {item.name}
     </Link>
   );
+
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -246,6 +249,7 @@ function Layout({ children }: LayoutProps) {
             <button
               onClick={handleSignOut}
               className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100"
+
             >
               <LogOut className="h-5 w-5" />
             </button>

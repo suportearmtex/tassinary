@@ -10,6 +10,7 @@ import Clients from './pages/Clients';
 import Services from './pages/Services';
 import WhatsApp from './pages/WhatsApp';
 import Settings from './pages/Settings';
+import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { useAuthStore } from './store/authStore';
@@ -18,6 +19,7 @@ import Users from './pages/Users';
 const queryClient = new QueryClient();
 
 function App() {
+
   const { user, loading, initializeAuth } = useAuthStore();
 
   // Inicializar autenticação ao carregar a aplicação
@@ -33,6 +35,7 @@ function App() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Carregando...</p>
         </div>
+
       </div>
     );
   }
@@ -62,7 +65,9 @@ function App() {
               <Route path="/services" element={<Services />} />
               <Route path="/whatsapp" element={<WhatsApp />} />
               <Route path="/settings" element={<Settings />} />
+
               <Route path="/users" element={<Users />} />
+
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>
