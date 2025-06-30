@@ -9,14 +9,17 @@ import {
   LogOut,
   Sun,
   Moon,
+
   ChevronDown,
   Calendar
+
 } from 'lucide-react';
 import { useLayoutServices } from '../services/layoutServices';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
+
 
 // Componente do Avatar do usuário
 const UserAvatar: React.FC<{ initials: string; className?: string }> = ({ 
@@ -28,6 +31,7 @@ const UserAvatar: React.FC<{ initials: string; className?: string }> = ({
   </div>
 );
 
+
 // Componente de Badge para notificações
 const NotificationBadge: React.FC<{ count?: number }> = ({ count }) => {
   if (!count || count === 0) return null;
@@ -38,6 +42,7 @@ const NotificationBadge: React.FC<{ count?: number }> = ({ count }) => {
     </span>
   );
 };
+
 
 // Componente de Item de Navegação
 const NavigationItem: React.FC<{
@@ -66,6 +71,7 @@ const NavigationItem: React.FC<{
     )} */}
   </Link>
 );
+
 
 // Componente da Sidebar Desktop
 const DesktopSidebar: React.FC<{
@@ -147,6 +153,7 @@ const DesktopSidebar: React.FC<{
               onClick={onSignOut}
               className="p-2 text-gray-400 hover:text-red-600 dark:text-gray-300 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               title="Sair"
+
             >
               <LogOut className="h-5 w-5" />
             </button>

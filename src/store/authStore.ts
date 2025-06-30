@@ -6,6 +6,7 @@ interface User {
   id: string;
   full_name?:string;
   email: string;
+  full_name: string | null;
   role: 'admin' | 'professional' | 'receptionist';
 }
 
@@ -15,6 +16,7 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   initializeAuth: () => Promise<void>;
+
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -43,6 +45,7 @@ export const useAuthStore = create<AuthState>()(
         };
 
         set({ user: userData, loading: false });
+
       },
       signOut: async () => {
         await supabase.auth.signOut();
@@ -77,6 +80,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Erro ao inicializar auth:', error);
           set({ user: null, loading: false });
+
         }
       },
     }),
@@ -85,3 +89,16 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+// Inicializar o estado do usuário quando a aplicação carrega
+supabase.auth.onAuthStateChange(async (event, session) => {
+  const { refreshUser } = useAuthStore.getState();
+  
+  if (event === 'SIGNED_IN' && session?.user) {
+    await refreshUser();
+  } else if (event === 'SIGNED_OUT') {
+    useAuthStore.setState({ user: null });
+  }
+  
+  useAuthStore.setState({ loading: false });
+});
