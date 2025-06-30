@@ -1,51 +1,15 @@
 // src/services/dashboardServices.ts
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../store/authStore';
-import { format, isToday, isTomorrow, addMinutes } from 'date-fns';
+import { Appointment, Client, Service } from '../lib/types';
+import { format, addMinutes, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '../store/authStore';
 
-// Tipos
-interface Agendamento {
-  id: string;
-  client_id: string;
-  service_id: string;
-  date: string;
-  time: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  price: number;
-  messages_sent?: {
-    confirmation?: boolean;
-    reminder_24h?: boolean;
-    reminder_1h?: boolean;
-    cancellation?: boolean;
-  };
-  client?: {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-  };
-  service?: {
-    id: string;
-    name: string;
-    duration: string;
-    price: string;
-  };
-}
-
-interface NovoAgendamento {
-  client_id: string;
-  service_id: string;
-  service?: any;
-  date: string;
-  time: string;
-  price: string;
-}
-
-interface Estatisticas {
+// Types essenciais
+export interface EstatisticasDashboard {
   totalAgendamentos: number;
   agendamentosHoje: number;
   agendamentosAmanha: number;
@@ -55,313 +19,383 @@ interface Estatisticas {
   agendamentosCancelados: number;
 }
 
-// Serviços de estatísticas
-export const servicoEstatisticasDashboard = {
-  calcularEstatisticas(agendamentos: Agendamento[]): Estatisticas {
-    const hoje = new Date();
-    const agendamentosHoje = agendamentos.filter(apt => isToday(new Date(apt.date)));
-    const agendamentosAmanha = agendamentos.filter(apt => isTomorrow(new Date(apt.date)));
-    
-    return {
-      totalAgendamentos: agendamentos.length,
-      agendamentosHoje: agendamentosHoje.length,
-      agendamentosAmanha: agendamentosAmanha.length,
-      receitaTotal: agendamentos
-        .filter(apt => apt.status === 'confirmed')
-        .reduce((total, apt) => total + (apt.price || 0), 0),
-      agendamentosPendentes: agendamentos.filter(apt => apt.status === 'pending').length,
-      agendamentosCompletos: agendamentos.filter(apt => apt.status === 'confirmed').length,
-      agendamentosCancelados: agendamentos.filter(apt => apt.status === 'cancelled').length,
-    };
-  },
+export interface DadosFormularioAgendamento {
+  client_id: string;
+  service_id: string;
+  service?: any;
+  date: string;
+  time: string;
+  price: string;
+}
 
-  obterAgendamentosPorPeriodo(agendamentos: Agendamento[], periodo: 'hoje' | 'amanha'): Agendamento[] {
+// Serviços de estatísticas (compatível com status do banco)
+export const servicoEstatisticasDashboard = {
+  obterAgendamentosPorPeriodo(agendamentos: Appointment[], periodo: 'hoje' | 'amanha'): Appointment[] {
     const hoje = format(new Date(), 'yyyy-MM-dd');
     const amanha = format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
     
     return agendamentos.filter(apt => {
       return periodo === 'hoje' ? apt.date === hoje : apt.date === amanha;
     });
-  },
-
-  formatarEventosCalendario(agendamentos: Agendamento[]) {
-    return agendamentos.map(apt => ({
-      id: apt.id,
-      title: `${apt.client?.name} - ${apt.service?.name}`,
-      start: `${apt.date}T${apt.time}`,
-      end: apt.service?.duration ? 
-        `${apt.date}T${format(addMinutes(new Date(`${apt.date}T${apt.time}`), parseInt(apt.service.duration)), 'HH:mm')}` :
-        `${apt.date}T${apt.time}`,
-      backgroundColor: apt.status === 'pending' ? '#3b82f6' : 
-                     apt.status === 'confirmed' ? '#10b981' : '#ef4444',
-      borderColor: apt.status === 'pending' ? '#2563eb' : 
-                   apt.status === 'confirmed' ? '#059669' : '#dc2626',
-    }));
   }
 };
 
-// Utilitários
-export const utilitarios = {
-  formatarMoeda(valor: number): string {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(valor);
-  },
+// Hook principal
+export const useDashboardCompleto = () => {
+  const user = useAuthStore((state) => state.user);
+  const queryClient = useQueryClient();
 
-  formatarData(data: string): string {
-    return format(new Date(data), 'dd/MM/yyyy', { locale: ptBR });
-  },
+  // Estados
+  const [isModalAberto, setIsModalAberto] = useState(false);
+  const [isModoEdicao, setIsModoEdicao] = useState(false);
+  const [isModalExclusaoAberto, setIsModalExclusaoAberto] = useState(false);
+  const [isModalHorarioAberto, setIsModalHorarioAberto] = useState(false);
+  const [agendamentoParaExcluir, setAgendamentoParaExcluir] = useState<string | null>(null);
+  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Appointment | null>(null);
+  const [filtroCliente, setFiltroCliente] = useState('');
+  const [isDropdownClienteAberto, setIsDropdownClienteAberto] = useState(false);
+  const [novoAgendamento, setNovoAgendamento] = useState<DadosFormularioAgendamento>({
+    client_id: '', service_id: '', service: null, date: '', time: '', price: '0.00',
+  });
+  const [configuracaoHorario, setConfiguracaoHorario] = useState({
+    horario_inicio: '08:00', horario_fim: '18:00',
+  });
 
-  formatarHora(hora: string): string {
-    return hora.substring(0, 5);
-  },
-
-  calcularHorarioTermino(horarioInicio: string, duracao: string): string {
-    if (!horarioInicio || !duracao) return '';
-    
-    const [horas, minutos] = horarioInicio.split(':').map(Number);
-    const duracaoMinutos = parseInt(duracao);
-    
-    const dataInicio = new Date();
-    dataInicio.setHours(horas, minutos, 0, 0);
-    
-    const dataFim = addMinutes(dataInicio, duracaoMinutos);
-    
-    return format(dataFim, 'HH:mm');
-  },
-
-  limparFormularioAgendamento(): NovoAgendamento {
-    return {
-      client_id: '',
-      service_id: '',
-      service: null,
-      date: '',
-      time: '',
-      price: '0.00',
-    };
-  },
-};
-
-// Hook para buscar agendamentos
-const useAgendamentos = (userId?: string) => {
-  return useQuery({
-    queryKey: ['appointments', userId],
+  // Queries
+  const agendamentos = useQuery({
+    queryKey: ['agendamentos', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('appointments')
-        .select(`
-          *,
-          client:clients(*),
-          service:services(*)
-        `)
-        .eq('user_id', userId)
-        .order('date', { ascending: true })
-        .order('time', { ascending: true });
-
+        .select('*, client:clients(*), service_details:services(*)')
+        .eq('user_id', user?.id)
+        .order('date', { ascending: true });
       if (error) throw error;
-      return data as Agendamento[];
+      return data as Appointment[];
     },
-    enabled: !!userId,
+    enabled: !!user?.id,
   });
-};
 
-// Hook para buscar clientes
-const useClientes = (userId?: string) => {
-  return useQuery({
-    queryKey: ['clients', userId],
+  const clientes = useQuery({
+    queryKey: ['clientes', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', user?.id)
         .order('name', { ascending: true });
-
       if (error) throw error;
-      return data;
+      return data as Client[];
     },
-    enabled: !!userId,
+    enabled: !!user?.id,
   });
-};
 
-// Hook para buscar serviços
-const useServicos = (userId?: string) => {
-  return useQuery({
-    queryKey: ['services', userId],
+  const servicos = useQuery({
+    queryKey: ['servicos', user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', user?.id)
         .order('name', { ascending: true });
-
       if (error) throw error;
-      return data;
+      return data as Service[];
     },
-    enabled: !!userId,
+    enabled: !!user?.id,
   });
-};
 
-// Hook para criar agendamento
-const useCriarAgendamento = () => {
-  const queryClient = useQueryClient();
-  const { user } = useAuthStore();
+  const configuracaoHorarioQuery = useQuery({
+    queryKey: ['configuracao_horario', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('setting_key', 'horario_funcionamento')
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data?.setting_value) {
+        return JSON.parse(data.setting_value);
+      }
+      return { horario_inicio: '08:00', horario_fim: '18:00' };
+    },
+    enabled: !!user?.id,
+  });
 
-  return useMutation({
-    mutationFn: async (novoAgendamento: NovoAgendamento) => {
+  // Mutations
+  const criarAgendamento = useMutation({
+    mutationFn: async (dados: DadosFormularioAgendamento) => {
       const { data, error } = await supabase
         .from('appointments')
-        .insert([{
-          ...novoAgendamento,
+        .insert([{ 
+          ...dados, 
           user_id: user?.id,
           status: 'pending',
-          price: parseFloat(novoAgendamento.price),
+          price: parseFloat(dados.price),
+          is_synced_to_google: false
         }])
-        .select()
+        .select('*, client:clients(*), service_details:services(*)')
         .single();
-
       if (error) throw error;
+
+      // Sync with Google Calendar
+      try {
+        await syncWithGoogleCalendar(data, 'create');
+      } catch (error) {
+        console.error('Failed to sync with Google Calendar:', error);
+        toast.error('Agendamento criado, mas falhou ao sincronizar com Google Calendar');
+      }
+
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['agendamentos', user?.id] });
       toast.success('Agendamento criado com sucesso!');
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+    onError: (error: Error) => toast.error(error.message),
   });
-};
 
-// Hook para atualizar agendamento
-const useAtualizarAgendamento = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ id, ...updateData }: { id: string } & Partial<NovoAgendamento>) => {
-      const { data, error } = await supabase
+  const atualizarAgendamento = useMutation({
+    mutationFn: async (dados: Partial<Appointment> & { id: string }) => {
+      // Buscar appointment original para preservar dados de sincronização
+      const { data: originalAppointment, error: fetchError } = await supabase
         .from('appointments')
-        .update({
-          ...updateData,
-          price: updateData.price ? parseFloat(updateData.price) : undefined,
-        })
-        .eq('id', id)
-        .select()
+        .select('*, client:clients(*), service_details:services(*)')
+        .eq('id', dados.id)
         .single();
 
+      if (fetchError) throw fetchError;
+
+      const updateData = { ...dados };
+      if (dados.price) {
+        updateData.price = parseFloat(dados.price.toString());
+      }
+      
+      const { data, error } = await supabase
+        .from('appointments')
+        .update(updateData)
+        .eq('id', dados.id)
+        .select('*, client:clients(*), service_details:services(*)')
+        .single();
       if (error) throw error;
+
+      // Sync with Google Calendar apenas se estiver sincronizado
+      if (originalAppointment.is_synced_to_google && originalAppointment.google_event_id) {
+        const appointmentForSync = {
+          ...data,
+          google_event_id: originalAppointment.google_event_id,
+          is_synced_to_google: originalAppointment.is_synced_to_google
+        };
+
+        try {
+          await syncWithGoogleCalendar(appointmentForSync, 'update');
+        } catch (error) {
+          console.error('Failed to sync with Google Calendar:', error);
+          toast.error('Agendamento atualizado, mas falhou ao sincronizar com Google Calendar');
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['agendamentos', user?.id] });
       toast.success('Agendamento atualizado com sucesso!');
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+    onError: (error: Error) => toast.error(error.message),
   });
-};
 
-// Hook para excluir agendamento
-const useExcluirAgendamento = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
+  const excluirAgendamento = useMutation({
     mutationFn: async (id: string) => {
+      // Buscar appointment original para preservar dados de sincronização
+      const { data: originalAppointment, error: fetchError } = await supabase
+        .from('appointments')
+        .select('*, client:clients(*), service_details:services(*)')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Sync with Google Calendar first (apenas se sincronizado)
+      if (originalAppointment.is_synced_to_google && originalAppointment.google_event_id) {
+        try {
+          await syncWithGoogleCalendar(originalAppointment, 'delete');
+        } catch (error) {
+          console.error('Failed to sync deletion with Google Calendar:', error);
+          toast.error('Erro ao remover evento do Google Calendar');
+        }
+      }
+
       const { error } = await supabase
         .from('appointments')
         .delete()
         .eq('id', id);
-
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['agendamentos', user?.id] });
       toast.success('Agendamento excluído com sucesso!');
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+    onError: (error: Error) => toast.error(error.message),
   });
-};
 
-// Hook para enviar mensagem
-const useEnviarMensagem = () => {
-  const queryClient = useQueryClient();
+  // Função de sincronização com Google Calendar
+  const syncWithGoogleCalendar = async (appointment: any, operation: 'create' | 'update' | 'delete') => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.warn('No session found, skipping Google Calendar sync');
+        return;
+      }
 
-  return useMutation({
-    mutationFn: async ({ id, type }: { id: string; type: string }) => {
-      const { error } = await supabase.functions.invoke('send-whatsapp-message', {
-        body: { appointmentId: id, messageType: type }
+      // Para operações update/delete, verificar se está sincronizado
+      if ((operation === 'update' || operation === 'delete') && !appointment.is_synced_to_google) {
+        console.warn(`Appointment ${appointment.id} is not synced to Google Calendar, skipping ${operation}`);
+        return;
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-google-calendar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointment,
+          operation,
+        }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${operation} event in Google Calendar`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error(`Error syncing ${operation} with Google Calendar:`, error);
+      throw error;
+    }
+  };
+
+  const salvarConfiguracaoHorario = useMutation({
+    mutationFn: async (config: { horario_inicio: string; horario_fim: string }) => {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .upsert({
+          user_id: user?.id,
+          setting_key: 'horario_funcionamento',
+          setting_value: JSON.stringify(config),
+        });
       if (error) throw error;
+      return data;
     },
-    onSuccess: (_, { type }) => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
-      const messageType = type === 'confirmation' ? 'confirmação' : 
-                         type === 'reminder_24h' ? 'lembrete (24h)' :
-                         type === 'reminder_1h' ? 'lembrete (1h)' : 'cancelamento';
-      toast.success(`Mensagem de ${messageType} enviada com sucesso!`);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['configuracao_horario', user?.id] });
+      toast.success('Horário atualizado!');
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+    onError: (error: Error) => toast.error(error.message),
   });
-};
 
-// Hook principal que combina todos os dados e funções
-export const useDashboardCompleto = () => {
-  const { user } = useAuthStore();
-  
-  // Estados para modais
-  const [isModalAberto, setIsModalAberto] = useState(false);
-  const [isModoEdicao, setIsModoEdicao] = useState(false);
-  const [isModalExclusaoAberto, setIsModalExclusaoAberto] = useState(false);
-  const [agendamentoParaExcluir, setAgendamentoParaExcluir] = useState<string | null>(null);
-  const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Agendamento | null>(null);
-  
-  // Estados para formulário
-  const [filtroCliente, setFiltroCliente] = useState('');
-  const [isDropdownClienteAberto, setIsDropdownClienteAberto] = useState(false);
-  const [novoAgendamento, setNovoAgendamento] = useState<NovoAgendamento>(
-    utilitarios.limparFormularioAgendamento()
-  );
+  const enviarMensagem = useMutation({
+    mutationFn: async (dados: { id: string; type: string }) => {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-whatsapp-message`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dados),
+      });
+      if (!response.ok) throw new Error('Erro ao enviar mensagem');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['agendamentos', user?.id] });
+      const tipo = data.type === 'confirmation' ? 'confirmação' : 'lembrete';
+      toast.success(`Mensagem de ${tipo} enviada!`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
-  // Queries
-  const agendamentos = useAgendamentos(user?.id);
-  const clientes = useClientes(user?.id);
-  const servicos = useServicos(user?.id);
+  // Funções utilitárias
+  const calcularEstatisticas = (appointments: Appointment[]): EstatisticasDashboard => {
+    const hoje = new Date();
+    const amanha = addDays(hoje, 1);
+    
+    const agendamentosHoje = appointments.filter(apt => {
+      const data = new Date(apt.date);
+      return data >= startOfDay(hoje) && data <= endOfDay(hoje);
+    });
+    
+    const agendamentosAmanha = appointments.filter(apt => {
+      const data = new Date(apt.date);
+      return data >= startOfDay(amanha) && data <= endOfDay(amanha);
+    });
 
-  // Mutations
-  const criarAgendamento = useCriarAgendamento();
-  const atualizarAgendamento = useAtualizarAgendamento();
-  const excluirAgendamento = useExcluirAgendamento();
-  const enviarMensagem = useEnviarMensagem();
+    return {
+      totalAgendamentos: appointments.length,
+      agendamentosHoje: agendamentosHoje.length,
+      agendamentosAmanha: agendamentosAmanha.length,
+      receitaTotal: appointments
+        .filter(apt => apt.status === 'confirmed')
+        .reduce((sum, apt) => sum + parseFloat(apt.price?.toString() || '0'), 0),
+      agendamentosPendentes: appointments.filter(apt => apt.status === 'pending').length,
+      agendamentosCompletos: appointments.filter(apt => apt.status === 'confirmed').length,
+      agendamentosCancelados: appointments.filter(apt => apt.status === 'cancelled').length,
+    };
+  };
 
-  // Dados calculados
-  const estatisticas = useMemo(() => {
-    if (!agendamentos.data) return null;
-    return servicoEstatisticasDashboard.calcularEstatisticas(agendamentos.data);
-  }, [agendamentos.data]);
+  const formatarMoeda = (valor: number) => 
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 
-  const eventosCalendario = useMemo(() => {
-    if (!agendamentos.data) return [];
-    return servicoEstatisticasDashboard.formatarEventosCalendario(agendamentos.data);
-  }, [agendamentos.data]);
+  const calcularHorarioTermino = (horario: string, duracao: string) => {
+    if (!horario || !duracao) return '';
+    const [h, m] = horario.split(':').map(Number);
+    const total = h * 60 + m + parseInt(duracao);
+    const hFim = Math.floor(total / 60);
+    const mFim = total % 60;
+    return `${hFim.toString().padStart(2, '0')}:${mFim.toString().padStart(2, '0')}`;
+  };
 
-  const clientesFiltrados = useMemo(() => {
-    if (!clientes.data || !filtroCliente) return [];
-    return clientes.data.filter(cliente =>
-      cliente.name.toLowerCase().includes(filtroCliente.toLowerCase())
-    );
-  }, [clientes.data, filtroCliente]);
+  const eventosCalendario = agendamentos.data && servicos.data ? 
+    agendamentos.data.map(apt => {
+      const inicio = parseISO(`${apt.date}T${apt.time}`);
+      const servico = servicos.data?.find(s => s.id === apt.service_id);
+      const fim = servico ? addMinutes(inicio, parseInt(servico.duration)) : inicio;
+      return {
+        id: apt.id,
+        title: `${apt.client?.name} - ${apt.service?.name}`,
+        start: inicio,
+        end: fim,
+        backgroundColor: apt.status === 'pending' ? '#3b82f6' : 
+                        apt.status === 'confirmed' ? '#10b981' : '#ef4444',
+        borderColor: apt.status === 'pending' ? '#2563eb' : 
+                     apt.status === 'confirmed' ? '#059669' : '#dc2626',
+        extendedProps: { appointment: apt },
+      };
+    }) : [];
+
+  const clientesFiltrados = clientes.data?.filter(c => 
+    c.name.toLowerCase().includes(filtroCliente.toLowerCase())
+  ) || [];
+
+  const agendamentosHoje = agendamentos.data ? 
+    servicoEstatisticasDashboard.obterAgendamentosPorPeriodo(agendamentos.data, 'hoje') : [];
 
   return {
-    // Dados do usuário
-    user,
+    // Estados
+    isModalAberto, setIsModalAberto,
+    isModoEdicao, setIsModoEdicao,
+    isModalExclusaoAberto, setIsModalExclusaoAberto,
+    isModalHorarioAberto, setIsModalHorarioAberto,
+    agendamentoParaExcluir, setAgendamentoParaExcluir,
+    agendamentoSelecionado, setAgendamentoSelecionado,
+    filtroCliente, setFiltroCliente,
+    isDropdownClienteAberto, setIsDropdownClienteAberto,
+    novoAgendamento, setNovoAgendamento,
+    configuracaoHorario, setConfiguracaoHorario,
     
-    // Queries
+    // Dados
     agendamentos,
     clientes,
     servicos,
@@ -370,34 +404,23 @@ export const useDashboardCompleto = () => {
     criarAgendamento,
     atualizarAgendamento,
     excluirAgendamento,
+    salvarConfiguracaoHorario,
     enviarMensagem,
     
-    // Dados calculados
-    estatisticas,
+    // Dados processados
+    estatisticas: agendamentos.data ? calcularEstatisticas(agendamentos.data) : null,
     eventosCalendario,
     clientesFiltrados,
+    agendamentosHoje,
+    horarioComercial: configuracaoHorarioQuery.data || { horario_inicio: '08:00', horario_fim: '18:00' },
     
     // Utilitários
-    utilitarios,
-    
-    // Estados do modal
-    isModalAberto,
-    setIsModalAberto,
-    isModoEdicao,
-    setIsModoEdicao,
-    isModalExclusaoAberto,
-    setIsModalExclusaoAberto,
-    agendamentoParaExcluir,
-    setAgendamentoParaExcluir,
-    agendamentoSelecionado,
-    setAgendamentoSelecionado,
-    
-    // Estados do formulário
-    filtroCliente,
-    setFiltroCliente,
-    isDropdownClienteAberto,
-    setIsDropdownClienteAberto,
-    novoAgendamento,
-    setNovoAgendamento,
+    utilitarios: {
+      formatarMoeda,
+      calcularHorarioTermino,
+      limparFormularioAgendamento: () => ({
+        client_id: '', service_id: '', service: null, date: '', time: '', price: '0.00',
+      }),
+    },
   };
 };
