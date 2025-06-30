@@ -1,5 +1,5 @@
 // src/pages/Dashboard.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -16,26 +16,25 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Eye
+  Eye,
+  Settings
 } from 'lucide-react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { format } from 'date-fns';
+import { format, addMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useDashboardCompleto, servicoEstatisticasDashboard } from '../services/dashboardServices';
 
-// Componente de Card de Estatística
+// Componente de Card de Estatística (removido mudança e tipoMudança)
 const CartaoEstatistica: React.FC<{
   titulo: string;
   valor: string | number;
-  mudanca?: string;
-  tipoMudanca?: 'positivo' | 'negativo' | 'neutro';
   icone: React.ComponentType<{ className?: string }>;
   gradiente: string;
   loading?: boolean;
-}> = ({ titulo, valor, mudanca, tipoMudanca = 'neutro', icone: Icone, gradiente, loading = false }) => (
+}> = ({ titulo, valor, icone: Icone, gradiente, loading = false }) => (
   <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradiente} p-6 text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105`}>
     <div className="flex items-center justify-between">
       <div className="flex-1">
@@ -46,15 +45,6 @@ const CartaoEstatistica: React.FC<{
           </div>
         ) : (
           <p className="mt-2 text-3xl font-bold">{valor}</p>
-        )}
-        {mudanca && (
-          <div className={`mt-1 flex items-center text-sm ${
-            tipoMudanca === 'positivo' ? 'text-green-200' :
-            tipoMudanca === 'negativo' ? 'text-red-200' : 'text-white/60'
-          }`}>
-            <TrendingUp className={`w-4 h-4 mr-1 ${tipoMudanca === 'negativo' ? 'rotate-180' : ''}`} />
-            {mudanca}
-          </div>
         )}
       </div>
       <div className="p-3 bg-white/20 rounded-full backdrop-blur-sm">
@@ -86,84 +76,101 @@ const ListaAgendamentosHoje: React.FC<{
       </span>
     </div>
     
-    {agendamentos.length === 0 ? (
-      <div className="text-center py-8">
-        <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-        <p className="text-gray-500 dark:text-gray-400">Nenhum agendamento para hoje</p>
-      </div>
-    ) : (
-      <div className="space-y-3">
-        {agendamentos.map((agendamento) => (
-          <div 
-            key={agendamento.id}
-            className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <div className="flex items-center space-x-4 flex-1">
-              <div className={`w-3 h-3 rounded-full ${
-                agendamento.status === 'scheduled' ? 'bg-yellow-400' :
-                agendamento.status === 'completed' ? 'bg-green-400' :
-                agendamento.status === 'cancelled' ? 'bg-red-400' : 'bg-gray-400'
-              }`} />
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center space-x-2">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {agendamento.client?.name}
-                  </p>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">•</span>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 truncate">
-                    {agendamento.service_details?.name}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-4 mt-1">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
-                    <Clock className="w-3 h-3 mr-1" />
-                    {agendamento.time}
-                  </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
-                    <DollarSign className="w-3 h-3 mr-1" />
-                    {utilitarios.formatarMoeda(parseFloat(agendamento.price || '0'))}
-                  </span>
+    {/* Scrollbar melhorada */}
+    <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800">
+      {agendamentos.length === 0 ? (
+        <div className="text-center py-8">
+          <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-500 dark:text-gray-400">Nenhum agendamento para hoje</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {agendamentos.map((agendamento) => (
+            <div 
+              key={agendamento.id}
+              className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <div className="flex items-center space-x-4 flex-1">
+                <div className={`w-3 h-3 rounded-full ${
+                  agendamento.status === 'scheduled' ? 'bg-yellow-400' :
+                  agendamento.status === 'completed' ? 'bg-green-400' :
+                  agendamento.status === 'cancelled' ? 'bg-red-400' : 'bg-gray-400'
+                }`} />
+                
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {agendamento.time}
+                    </span>
+                    <span className="text-gray-400">-</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      {utilitarios.calcularHorarioTermino(agendamento.time, agendamento.service?.duration || '60')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{agendamento.client?.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">{agendamento.service?.name}</p>
                 </div>
               </div>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => onEditar(agendamento)}
-                className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                title="Editar"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
               
-              <button
-                onClick={() => onEnviarMensagem(agendamento.id, 'confirmation')}
-                disabled={agendamento.messages_sent?.confirmation}
-                className={`p-2 rounded-lg transition-colors ${
-                  agendamento.messages_sent?.confirmation
-                    ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => onEditar(agendamento)}
+                  className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  title="Editar"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                
+                <button
+                  onClick={() => onEnviarMensagem(agendamento.id, 'confirmation')}
+                  disabled={agendamento.messages_sent?.confirmation}
+                  className={`p-2 rounded-lg transition-colors ${
+                    agendamento.messages_sent?.confirmation ? 
+                    'text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     : 'text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                }`}
-                title={agendamento.messages_sent?.confirmation ? 'Mensagem enviada' : 'Enviar confirmação'}
-              >
-                <Send className="w-4 h-4" />
-              </button>
-              
-              <button
-                onClick={() => onExcluir(agendamento.id)}
-                className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                title="Excluir"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+                  }`}
+                  title={agendamento.messages_sent?.confirmation ? 'Mensagem enviada' : 'Enviar confirmação'}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+                
+                <button
+                  onClick={() => onExcluir(agendamento.id)}
+                  className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  title="Excluir"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-    )}
+          ))}
+        </div>
+      )}
+    </div>
   </div>
 );
+
+// Hook para gerenciar horários de funcionamento no localStorage
+const useHorarioFuncionamento = () => {
+  const [horarios, setHorarios] = useState({
+    inicio: '08:00',
+    fim: '18:00'
+  });
+
+  useEffect(() => {
+    const horariosStorage = localStorage.getItem('horarios_funcionamento');
+    if (horariosStorage) {
+      setHorarios(JSON.parse(horariosStorage));
+    }
+  }, []);
+
+  const salvarHorarios = (novosHorarios: { inicio: string; fim: string }) => {
+    setHorarios(novosHorarios);
+    localStorage.setItem('horarios_funcionamento', JSON.stringify(novosHorarios));
+  };
+
+  return { horarios, salvarHorarios };
+};
 
 // Componente principal do Dashboard
 function Dashboard() {
@@ -180,7 +187,6 @@ function Dashboard() {
     eventosCalendario,
     clientesFiltrados,
     utilitarios,
-    horarioComercial,
     // Estados do modal
     isModalAberto,
     setIsModalAberto,
@@ -201,6 +207,8 @@ function Dashboard() {
   } = useDashboardCompleto();
 
   const dropdownClienteRef = useRef<HTMLDivElement>(null);
+  const [isModalHorarioAberto, setIsModalHorarioAberto] = useState(false);
+  const { horarios, salvarHorarios } = useHorarioFuncionamento();
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -223,6 +231,7 @@ function Dashboard() {
       date: format(infoSelecao.start, 'yyyy-MM-dd'),
       time: format(infoSelecao.start, 'HH:mm'),
     });
+    setFiltroCliente('');
     setIsModoEdicao(false);
     setAgendamentoSelecionado(null);
     setIsModalAberto(true);
@@ -286,7 +295,22 @@ function Dashboard() {
     await enviarMensagem.mutateAsync({ id, type: tipo });
   };
 
-  // Agendamentos de hoje
+  // Calcular horário de término
+  const calcularHorarioTermino = (horarioInicio: string, duracao: string) => {
+    if (!horarioInicio || !duracao) return '';
+    
+    const [horas, minutos] = horarioInicio.split(':').map(Number);
+    const duracaoMinutos = parseInt(duracao);
+    
+    const dataInicio = new Date();
+    dataInicio.setHours(horas, minutos, 0, 0);
+    
+    const dataFim = addMinutes(dataInicio, duracaoMinutos);
+    
+    return format(dataFim, 'HH:mm');
+  };
+
+  // Filtrar agendamentos de hoje (corrigido)
   const agendamentosHoje = agendamentos.data ? 
     servicoEstatisticasDashboard.obterAgendamentosPorPeriodo(agendamentos.data, 'hoje') : [];
 
@@ -310,27 +334,37 @@ function Dashboard() {
             Bem-vindo de volta! Aqui está um resumo do seu negócio hoje.
           </p>
         </div>
-        <button
-          onClick={() => {
-            setNovoAgendamento(utilitarios.limparFormularioAgendamento());
-            setIsModoEdicao(false);
-            setAgendamentoSelecionado(null);
-            setIsModalAberto(true);
-          }}
-          className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Novo Agendamento</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          {/* Botão de configurar horários */}
+          <button
+            onClick={() => setIsModalHorarioAberto(true)}
+            className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Horários</span>
+          </button>
+          
+          <button
+            onClick={() => {
+              setNovoAgendamento(utilitarios.limparFormularioAgendamento());
+              setFiltroCliente('');
+              setIsModoEdicao(false);
+              setAgendamentoSelecionado(null);
+              setIsModalAberto(true);
+            }}
+            className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Novo Agendamento</span>
+          </button>
+        </div>
       </div>
 
-      {/* Cards de Estatísticas */}
+      {/* Cards de Estatísticas (removidos subtítulos) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <CartaoEstatistica
           titulo="Total de Agendamentos"
           valor={estatisticas?.totalAgendamentos || 0}
-          mudanca="+12% este mês"
-          tipoMudanca="positivo"
           icone={Calendar}
           gradiente="from-blue-500 to-blue-600"
           loading={agendamentos.isLoading}
@@ -339,8 +373,6 @@ function Dashboard() {
         <CartaoEstatistica
           titulo="Agendamentos Hoje"
           valor={estatisticas?.agendamentosHoje || 0}
-          mudanca="2 confirmados"
-          tipoMudanca="neutro"
           icone={Clock}
           gradiente="from-green-500 to-green-600"
           loading={agendamentos.isLoading}
@@ -349,8 +381,6 @@ function Dashboard() {
         <CartaoEstatistica
           titulo="Receita Total"
           valor={estatisticas ? utilitarios.formatarMoeda(estatisticas.receitaTotal) : 'R$ 0,00'}
-          mudanca="+8% este mês"
-          tipoMudanca="positivo"
           icone={DollarSign}
           gradiente="from-purple-500 to-purple-600"
           loading={agendamentos.isLoading}
@@ -359,8 +389,6 @@ function Dashboard() {
         <CartaoEstatistica
           titulo="Clientes Ativos"
           valor={clientes.data?.length || 0}
-          mudanca="5 novos clientes"
-          tipoMudanca="positivo"
           icone={Users}
           gradiente="from-orange-500 to-orange-600"
           loading={clientes.isLoading}
@@ -395,8 +423,8 @@ function Dashboard() {
                   day: 'Dia'
                 }}
                 events={eventosCalendario}
-                slotMinTime={horarioComercial.inicio}
-                slotMaxTime={horarioComercial.fim}
+                slotMinTime={horarios.inicio}
+                slotMaxTime={horarios.fim}
                 locale="pt-br"
                 allDaySlot={false}
                 editable={false}
@@ -409,8 +437,8 @@ function Dashboard() {
                 snapDuration="00:15:00"
                 businessHours={{
                   daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-                  startTime: horarioComercial.inicio,
-                  endTime: horarioComercial.fim,
+                  startTime: horarios.inicio,
+                  endTime: horarios.fim,
                 }}
                 height="100%"
                 eventClassNames="cursor-pointer"
@@ -445,45 +473,6 @@ function Dashboard() {
 
       {/* Estatísticas Detalhadas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Status dos Agendamentos</h3>
-            <Eye className="w-5 h-5 text-gray-400" />
-          </div>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-                <span className="text-sm text-gray-600 dark:text-gray-300">Agendados</span>
-              </div>
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                {estatisticas?.agendamentosPendentes || 0}
-              </span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                <span className="text-sm text-gray-600 dark:text-gray-300">Concluídos</span>
-              </div>
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                {estatisticas?.agendamentosCompletos || 0}
-              </span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-                <span className="text-sm text-gray-600 dark:text-gray-300">Cancelados</span>
-              </div>
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                {estatisticas?.agendamentosCancelados || 0}
-              </span>
-            </div>
-          </div>
-        </div>
-
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Próximos Agendamentos</h3>
@@ -522,7 +511,7 @@ function Dashboard() {
       {/* Modal de Agendamento */}
       {isModalAberto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                 {isModoEdicao ? 'Editar Agendamento' : 'Novo Agendamento'}
@@ -542,54 +531,39 @@ function Dashboard() {
                   Cliente
                 </label>
                 {isModoEdicao ? (
-                  <div className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <div>
-                        <div className="font-medium">{agendamentoSelecionado?.client?.name}</div>
-                        {agendamentoSelecionado?.client?.phone && (
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {agendamentoSelecionado.client.phone}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  <div className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white">
+                    {agendamentoSelecionado?.client?.name}
                   </div>
                 ) : (
                   <div className="relative" ref={dropdownClienteRef}>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <input
-                        type="text"
-                        value={filtroCliente}
-                        onChange={(e) => {
-                          setFiltroCliente(e.target.value);
-                          setIsDropdownClienteAberto(true);
-                        }}
-                        onFocus={() => setIsDropdownClienteAberto(true)}
-                        placeholder="Buscar cliente..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      value={filtroCliente}
+                      onChange={(e) => {
+                        setFiltroCliente(e.target.value);
+                        setIsDropdownClienteAberto(true);
+                      }}
+                      onFocus={() => setIsDropdownClienteAberto(true)}
+                      placeholder="Digite o nome do cliente..."
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
                     
-                    {isDropdownClienteAberto && clientesFiltrados && clientesFiltrados.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto">
-                        {clientesFiltrados.map((client) => (
+                    {isDropdownClienteAberto && clientesFiltrados.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800">
+                        {clientesFiltrados.map((cliente) => (
                           <button
-                            key={client.id}
+                            key={cliente.id}
                             type="button"
                             onClick={() => {
-                              setNovoAgendamento({ ...novoAgendamento, client_id: client.id });
-                              setFiltroCliente(client.name);
+                              setNovoAgendamento({ ...novoAgendamento, client_id: cliente.id });
+                              setFiltroCliente(cliente.name);
                               setIsDropdownClienteAberto(false);
                             }}
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-white"
+                            className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-white transition-colors"
                           >
                             <div>
-                              <div className="font-medium">{client.name}</div>
-                              {client.phone && (
-                                <div className="text-sm text-gray-500 dark:text-gray-400">{client.phone}</div>
-                              )}
+                              <div className="font-medium">{cliente.name}</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">{cliente.phone}</div>
                             </div>
                           </button>
                         ))}
@@ -611,16 +585,17 @@ function Dashboard() {
                     setNovoAgendamento({
                       ...novoAgendamento,
                       service_id: e.target.value,
-                      price: servicoSelecionado?.price?.toString() || '0.00',
+                      service: servicoSelecionado,
+                      price: servicoSelecionado?.price || '0.00'
                     });
                   }}
                   required
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 >
                   <option value="">Selecione um serviço</option>
-                  {servicos.data?.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} - {utilitarios.formatarMoeda(parseFloat(service.price || '0'))}
+                  {servicos.data?.map((servico) => (
+                    <option key={servico.id} value={servico.id}>
+                      {servico.name} - {utilitarios.formatarMoeda(parseFloat(servico.price))}
                     </option>
                   ))}
                 </select>
@@ -642,7 +617,7 @@ function Dashboard() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                    Horário
+                    Hora
                   </label>
                   <input
                     type="time"
@@ -654,6 +629,16 @@ function Dashboard() {
                 </div>
               </div>
 
+              {/* Mostrar horário de término calculado */}
+              {novoAgendamento.time && novoAgendamento.service?.duration && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                  <p className="text-sm text-blue-800 dark:text-blue-300">
+                    <Clock className="w-4 h-4 inline mr-1" />
+                    Término previsto: {calcularHorarioTermino(novoAgendamento.time, novoAgendamento.service.duration)}
+                  </p>
+                </div>
+              )}
+
               {/* Preço */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
@@ -661,30 +646,29 @@ function Dashboard() {
                 </label>
                 <input
                   type="number"
+                  step="0.01"
                   value={novoAgendamento.price}
                   onChange={(e) => setNovoAgendamento({ ...novoAgendamento, price: e.target.value })}
-                  step="0.01"
-                  min="0"
                   required
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 />
               </div>
 
               {/* Botões */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex space-x-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setIsModalAberto(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={criarAgendamento.isPending || atualizarAgendamento.isPending}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 transition-colors flex items-center justify-center"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  {(criarAgendamento.isPending || atualizarAgendamento.isPending) ? (
+                  {criarAgendamento.isPending || atualizarAgendamento.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     isModoEdicao ? 'Atualizar' : 'Criar'
@@ -708,31 +692,108 @@ function Dashboard() {
         </div>
       )}
 
+      {/* Modal de Configuração de Horário */}
+      {isModalHorarioAberto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Configurar Horário de Funcionamento
+              </h3>
+              <button
+                onClick={() => setIsModalHorarioAberto(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                salvarHorarios(horarios);
+                setIsModalHorarioAberto(false);
+              }} 
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                    Horário de Início
+                  </label>
+                  <input
+                    type="time"
+                    value={horarios.inicio}
+                    onChange={(e) => salvarHorarios({
+                      ...horarios,
+                      inicio: e.target.value
+                    })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                    Horário de Fim
+                  </label>
+                  <input
+                    type="time"
+                    value={horarios.fim}
+                    onChange={(e) => salvarHorarios({
+                      ...horarios,
+                      fim: e.target.value
+                    })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsModalHorarioAberto(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Confirmação de Exclusão */}
       {isModalExclusaoAberto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <div className="text-center">
-              <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+                <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                 Confirmar Exclusão
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
                 Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.
               </p>
-              <div className="flex gap-3">
+              <div className="flex space-x-3">
                 <button
                   onClick={() => setIsModalExclusaoAberto(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={confirmarExclusao}
                   disabled={excluirAgendamento.isPending}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center"
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
                   {excluirAgendamento.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -745,6 +806,64 @@ function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* CSS para scrollbars melhoradas */}
+      <style jsx>{`
+        .scrollbar-thin {
+          scrollbar-width: thin;
+        }
+        
+        .scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+          background-color: #d1d5db;
+          border-radius: 6px;
+        }
+        
+        .dark .scrollbar-thumb-gray-600::-webkit-scrollbar-thumb {
+          background-color: #4b5563;
+          border-radius: 6px;
+        }
+        
+        .scrollbar-track-gray-100::-webkit-scrollbar-track {
+          background-color: #f3f4f6;
+          border-radius: 6px;
+        }
+        
+        .dark .scrollbar-track-gray-800::-webkit-scrollbar-track {
+          background-color: #1f2937;
+          border-radius: 6px;
+        }
+        
+        ::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+          border-radius: 6px;
+          background-color: #d1d5db;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+          background-color: #9ca3af;
+        }
+        
+        .dark ::-webkit-scrollbar-thumb {
+          background-color: #4b5563;
+        }
+        
+        .dark ::-webkit-scrollbar-thumb:hover {
+          background-color: #6b7280;
+        }
+        
+        ::-webkit-scrollbar-track {
+          background-color: #f3f4f6;
+          border-radius: 6px;
+        }
+        
+        .dark ::-webkit-scrollbar-track {
+          background-color: #1f2937;
+        }
+      `}</style>
     </div>
   );
 }
