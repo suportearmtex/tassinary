@@ -10,10 +10,10 @@ COPY package*.json ./
 # Install all dependencies (including dev dependencies)
 RUN npm ci
 
-# Copy source code
+# Copy source code and .env file
 COPY . .
 
-# Build the React app
+# Build the React app (Vite automaticamente vai ler o .env)
 RUN npm run build
 
 # Production stage
