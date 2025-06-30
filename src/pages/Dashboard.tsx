@@ -26,6 +26,8 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { format, addMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useDashboardCompleto, servicoEstatisticasDashboard } from '../services/dashboardServices';
+import { supabase } from '../lib/supabase';
+import toast from 'react-hot-toast';
 
 // Componente de Card de Estatística (removido mudança e tipoMudança)
 const CartaoEstatistica: React.FC<{
@@ -202,6 +204,8 @@ function Dashboard() {
     setFiltroCliente,
     isDropdownClienteAberto,
     setIsDropdownClienteAberto,
+    filtroTempo,
+    setFiltroTempo,
     novoAgendamento,
     setNovoAgendamento,
   } = useDashboardCompleto();
@@ -331,10 +335,61 @@ function Dashboard() {
             Painel de Controle
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Bem-vindo de volta! Aqui está um resumo do seu negócio hoje.
+            Bem-vindo de volta! Aqui está um resumo do seu negócio.
           </p>
         </div>
         <div className="flex items-center space-x-3">
+          {/* Filtros de tempo */}
+          <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+            {[
+              { key: 'dia', label: 'Hoje' },
+              { key: 'semana', label: 'Semana' },
+              { key: 'mes', label: 'Mês' }
+            ].map((filtro) => (
+              <button
+                key={filtro.key}
+                onClick={() => setFiltroTempo(filtro.key as any)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  filtroTempo === filtro.key
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                {filtro.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Botão de sincronização */}
+          <button
+            onClick={async () => {
+              try {
+                const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-all-appointments`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                    'Content-Type': 'application/json',
+                  },
+                });
+                
+                if (!response.ok) throw new Error('Erro na sincronização');
+                
+                const result = await response.json();
+                toast.success(`${result.synced} agendamentos sincronizados!`);
+                
+                // Recarregar dados
+                agendamentos.refetch();
+              } catch (error) {
+                toast.error('Erro ao sincronizar com Google Calendar');
+                console.error(error);
+              }
+            }}
+            className="flex items-center space-x-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-4 py-2 rounded-lg font-medium hover:bg-green-200 dark:hover:bg-green-900/50 transition-all duration-200"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Sincronizar</span>
+          </button>
+
           {/* Botão de configurar horários */}
           <button
             onClick={() => setIsModalHorarioAberto(true)}

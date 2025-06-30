@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Appointment, Client, Service } from '../lib/types';
-import { format, addMinutes, parseISO, startOfDay, endOfDay, addDays } from 'date-fns';
+import { format, addMinutes, parseISO, startOfDay, endOfDay, addDays, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../store/authStore';
@@ -30,13 +30,39 @@ export interface DadosFormularioAgendamento {
 
 // Serviços de estatísticas (compatível com status do banco)
 export const servicoEstatisticasDashboard = {
-  obterAgendamentosPorPeriodo(agendamentos: Appointment[], periodo: 'hoje' | 'amanha'): Appointment[] {
-    const hoje = format(new Date(), 'yyyy-MM-dd');
-    const amanha = format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+  obterAgendamentosPorPeriodo(agendamentos: Appointment[], periodo: 'hoje' | 'semana' | 'mes' | 'dia', dataReferencia?: Date): Appointment[] {
+    const hoje = dataReferencia || new Date();
     
     return agendamentos.filter(apt => {
-      return periodo === 'hoje' ? apt.date === hoje : apt.date === amanha;
+      const dataAgendamento = new Date(apt.date);
+      
+      switch (periodo) {
+        case 'hoje':
+        case 'dia':
+          return format(dataAgendamento, 'yyyy-MM-dd') === format(hoje, 'yyyy-MM-dd');
+          
+        case 'semana':
+          const inicioSemana = startOfDay(hoje);
+          inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+          const fimSemana = endOfDay(new Date(inicioSemana));
+          fimSemana.setDate(inicioSemana.getDate() + 6);
+          return dataAgendamento >= inicioSemana && dataAgendamento <= fimSemana;
+          
+        case 'mes':
+          return dataAgendamento.getMonth() === hoje.getMonth() && 
+                 dataAgendamento.getFullYear() === hoje.getFullYear();
+                 
+        default:
+          return true;
+      }
     });
+  },
+
+  obterAgendamentosHoje(agendamentos: Appointment[]): Appointment[] {
+    const hoje = format(new Date(), 'yyyy-MM-dd');
+    
+    return agendamentos.filter(apt => apt.date === hoje);
+    
   }
 };
 
@@ -54,6 +80,7 @@ export const useDashboardCompleto = () => {
   const [agendamentoSelecionado, setAgendamentoSelecionado] = useState<Appointment | null>(null);
   const [filtroCliente, setFiltroCliente] = useState('');
   const [isDropdownClienteAberto, setIsDropdownClienteAberto] = useState(false);
+  const [filtroTempo, setFiltroTempo] = useState<'hoje' | 'semana' | 'mes' | 'dia'>('mes');
   const [novoAgendamento, setNovoAgendamento] = useState<DadosFormularioAgendamento>({
     client_id: '', service_id: '', service: null, date: '', time: '', price: '0.00',
   });
@@ -318,30 +345,26 @@ export const useDashboardCompleto = () => {
   });
 
   // Funções utilitárias
-  const calcularEstatisticas = (appointments: Appointment[]): EstatisticasDashboard => {
-    const hoje = new Date();
-    const amanha = addDays(hoje, 1);
+  const calcularEstatisticas = (appointments: Appointment[], filtro: 'hoje' | 'semana' | 'mes' | 'dia' = 'mes'): EstatisticasDashboard => {
+    const agendamentosFiltrados = servicoEstatisticasDashboard.obterAgendamentosPorPeriodo(appointments, filtro);
     
-    const agendamentosHoje = appointments.filter(apt => {
-      const data = new Date(apt.date);
-      return data >= startOfDay(hoje) && data <= endOfDay(hoje);
-    });
+    // Usar função específica para hoje
+    const agendamentosHoje = servicoEstatisticasDashboard.obterAgendamentosHoje(appointments);
     
-    const agendamentosAmanha = appointments.filter(apt => {
-      const data = new Date(apt.date);
-      return data >= startOfDay(amanha) && data <= endOfDay(amanha);
-    });
+    // Calcular amanhã com string de data
+    const amanha = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+    const agendamentosAmanha = appointments.filter(apt => apt.date === amanha);
 
     return {
-      totalAgendamentos: appointments.length,
+      totalAgendamentos: agendamentosFiltrados.length,
       agendamentosHoje: agendamentosHoje.length,
       agendamentosAmanha: agendamentosAmanha.length,
-      receitaTotal: appointments
+      receitaTotal: agendamentosFiltrados
         .filter(apt => apt.status === 'confirmed')
         .reduce((sum, apt) => sum + parseFloat(apt.price?.toString() || '0'), 0),
-      agendamentosPendentes: appointments.filter(apt => apt.status === 'pending').length,
-      agendamentosCompletos: appointments.filter(apt => apt.status === 'confirmed').length,
-      agendamentosCancelados: appointments.filter(apt => apt.status === 'cancelled').length,
+      agendamentosPendentes: agendamentosFiltrados.filter(apt => apt.status === 'pending').length,
+      agendamentosCompletos: agendamentosFiltrados.filter(apt => apt.status === 'confirmed').length,
+      agendamentosCancelados: agendamentosFiltrados.filter(apt => apt.status === 'cancelled').length,
     };
   };
 
@@ -380,7 +403,7 @@ export const useDashboardCompleto = () => {
   ) || [];
 
   const agendamentosHoje = agendamentos.data ? 
-    servicoEstatisticasDashboard.obterAgendamentosPorPeriodo(agendamentos.data, 'hoje') : [];
+    servicoEstatisticasDashboard.obterAgendamentosHoje(agendamentos.data) : [];
 
   return {
     // Estados
@@ -392,6 +415,7 @@ export const useDashboardCompleto = () => {
     agendamentoSelecionado, setAgendamentoSelecionado,
     filtroCliente, setFiltroCliente,
     isDropdownClienteAberto, setIsDropdownClienteAberto,
+    filtroTempo, setFiltroTempo,
     novoAgendamento, setNovoAgendamento,
     configuracaoHorario, setConfiguracaoHorario,
     
@@ -408,7 +432,7 @@ export const useDashboardCompleto = () => {
     enviarMensagem,
     
     // Dados processados
-    estatisticas: agendamentos.data ? calcularEstatisticas(agendamentos.data) : null,
+    estatisticas: agendamentos.data ? calcularEstatisticas(agendamentos.data, filtroTempo) : null,
     eventosCalendario,
     clientesFiltrados,
     agendamentosHoje,
