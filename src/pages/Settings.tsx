@@ -225,7 +225,7 @@ function Settings() {
           
         </div>
       </div>
-          <ApiKeysManager />
+          {/* <ApiKeysManager /> */}
 
       {/* Disconnect Confirmation Modal */}
       {isDisconnectModalOpen && (
