@@ -1,12 +1,12 @@
 # 11. Nova versão - Build
-docker build -t jvg21/tassinary-app:v1.0.0 .
+docker build -t jvg21/tassinary-app:v1.1.0 .
 docker build -t jvg21/tassinary-app:latest .
 
 
 docker login
 
 # 12. Nova versão - Push
-docker push jvg21/tassinary-app:v1.0.0
+docker push jvg21/tassinary-app:v1.1.0
 docker push jvg21/tassinary-app:latest
 
 # 13. Verificar versões disponíveis
