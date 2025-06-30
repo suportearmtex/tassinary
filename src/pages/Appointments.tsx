@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Appointment, Client, Service } from '../lib/types';
 import { Calendar, Clock, User, Plus, Loader2, Send, Trash2, Edit2, Search, DollarSign, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { format, addMinutes, parseISO, isWithinInterval } from 'date-fns';
+import { format, addMinutes, parseISO, isWithinInterval, addDays } from 'date-fns';
 import { useAuthStore } from '../store/authStore';
 
 function Appointments() {
@@ -521,7 +521,7 @@ function Appointments() {
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
-                        <span>{format(new Date(appointment.date), 'dd/MM/yyyy')}</span>
+                       <span>{format(addDays(new Date(appointment.date), 1), 'dd/MM/yyyy')}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
