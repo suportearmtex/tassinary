@@ -29,7 +29,7 @@ export interface Appointment {
   id: string;
   client_id: string;
   service_id: string;
-  service: string;
+  service: Service;
   date: string;
   time: string;
   price: number;

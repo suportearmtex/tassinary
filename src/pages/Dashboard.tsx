@@ -23,7 +23,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { format, addMinutes } from 'date-fns';
+import { format, addMinutes, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useDashboardCompleto, servicoEstatisticasDashboard } from '../services/dashboardServices';
 import { supabase } from '../lib/supabase';
@@ -541,11 +541,11 @@ function Dashboard() {
               <div key={apt.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white text-sm">{apt.client?.name}</p>
-                  <p className="text-gray-600 dark:text-gray-400 text-xs">{apt.service}</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-xs">{apt.service?.name}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-gray-900 dark:text-white text-sm font-medium">{apt.time}</p>
-                  <p className="text-gray-600 dark:text-gray-400 text-xs">{format(new Date(apt.date), 'dd/MM', { locale: ptBR })}</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-xs">{format(addDays(new Date(apt.date),1), 'dd/MM', { locale: ptBR })}</p>
                 </div>
               </div>
             ))}
