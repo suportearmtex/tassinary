@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { MessageTemplate, EvolutionInstance } from '../lib/types';
 import toast from 'react-hot-toast';
+import InstanceContactsManager from '../components/InstanceContactsManager';
 
 const messageTypes = {
   confirmation: 'Confirmação',
@@ -420,7 +421,13 @@ function WhatsApp() {
             </div>
           )}
         </div>
-
+        {/* NOVA SEÇÃO: Instance Contacts - só aparece quando conectado */}
+        {instance && instance.status === 'connected' && (
+          <InstanceContactsManager
+            instanceId={instance.id} 
+            instanceStatus={instance.status} 
+          />
+        )}
         {/* Messages Section */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">

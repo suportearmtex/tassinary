@@ -64,3 +64,14 @@ export interface EvolutionInstance {
   created_at: string;
   updated_at: string;
 }
+
+export interface InstanceContact {
+  id: string;
+  instance_id: string;
+  phone_number: string;
+  jid: string;
+  contact_name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
