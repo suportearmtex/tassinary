@@ -63,8 +63,8 @@ export const navigationService = {
         badge: 3 // Exemplo: agendamentos pendentes
       },
       { 
-        name: 'Clientes', 
-        href: '/clients', 
+        name: 'Pacientes', 
+        href: '/pacients', 
         icon: Users 
       },
       { 

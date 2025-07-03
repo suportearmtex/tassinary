@@ -444,7 +444,7 @@ function Dashboard() {
         />
 
         <CartaoEstatistica
-          titulo="Clientes Ativos"
+          titulo="Pacientes Ativos"
           valor={clientes.data?.length || 0}
           icone={Users}
           gradiente="from-orange-500 to-orange-600"
@@ -575,7 +575,7 @@ function Dashboard() {
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Clientes Recentes</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pacientes Recentes</h3>
             <Users className="w-5 h-5 text-gray-400" />
           </div>
 
@@ -609,10 +609,10 @@ function Dashboard() {
               {/* Client Selection */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                  Cliente
+                  Paciente
                 </label>
                 {isModoEdicao && agendamentoSelecionado ? (
-                  // Campo fixo para edição - cliente não pode ser alterado
+                  // Campo fixo para edição - Paciente não pode ser alterado
                   <div className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-gray-400" />
@@ -639,7 +639,7 @@ function Dashboard() {
                           setIsDropdownClienteAberto(true);
                         }}
                         onFocus={() => setIsDropdownClienteAberto(true)}
-                        placeholder="Buscar cliente..."
+                        placeholder="Buscar Paciente..."
                         className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                       />
                     </div>

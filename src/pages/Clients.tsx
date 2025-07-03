@@ -313,7 +313,7 @@ function Clients() {
       <div className="flex items-center justify-center min-h-96">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Carregando clientes...</p>
+          <p className="text-gray-600 dark:text-gray-400">Carregando Pacientes...</p>
         </div>
       </div>
     );
@@ -325,10 +325,10 @@ function Clients() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">
-            Clientes
+            Pacientes
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Gerencie sua base de clientes
+            Gerencie sua base de Pacientes
           </p>
         </div>
         
@@ -346,7 +346,7 @@ function Clients() {
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg"
           >
             <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Novo Cliente</span>
+            <span className="hidden sm:inline">Novo Pacientes</span>
           </button>
         </div>
       </div>
@@ -354,7 +354,7 @@ function Clients() {
       {/* Estatísticas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard
-          title="Total de Clientes"
+          title="Total de Pacientes"
           value={stats.total}
           icon={<Users className="w-6 h-6" />}
           color="from-blue-500 to-blue-600"
@@ -465,14 +465,14 @@ function Clients() {
             <Users className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
               {filters.search || filters.hasPhone !== null || filters.hasEmail !== null 
-                ? 'Nenhum cliente encontrado' 
-                : 'Nenhum cliente cadastrado'
+                ? 'Nenhum Pacientes encontrado' 
+                : 'Nenhum Pacientes cadastrado'
               }
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               {filters.search || filters.hasPhone !== null || filters.hasEmail !== null
                 ? 'Tente ajustar os filtros de busca'
-                : 'Comece adicionando seu primeiro cliente'
+                : 'Comece adicionando seu primeiro Pacientes'
               }
             </p>
             {(!filters.search && filters.hasPhone === null && filters.hasEmail === null) && (
@@ -481,7 +481,7 @@ function Clients() {
                 className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg"
               >
                 <Plus className="w-5 h-5" />
-                Adicionar Primeiro Cliente
+                Adicionar Primeiro Paciente
               </button>
             )}
           </div>
@@ -493,7 +493,7 @@ function Clients() {
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-4 px-6 font-medium text-gray-600 dark:text-gray-400">
-                      Cliente
+                      Paciente
                     </th>
                     <th className="text-left py-4 px-6 font-medium text-gray-600 dark:text-gray-400">
                       Contato
@@ -619,7 +619,7 @@ function Clients() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h3 className="text-xl font-semibold mb-6 text-gray-900 dark:text-white">
-              {isEditMode ? 'Editar Cliente' : 'Novo Cliente'}
+              {isEditMode ? 'Editar Paciente' : 'Novo Paciente'}
             </h3>
             
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -701,7 +701,7 @@ function Clients() {
               </h3>
               
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.
+                Tem certeza que deseja excluir este paciente? Esta ação não pode ser desfeita.
               </p>
               
               <div className="flex items-center justify-center space-x-3">

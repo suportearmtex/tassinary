@@ -58,7 +58,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/appointments" element={<Appointments />} />
-              <Route path="/clients" element={<Clients />} />
+              <Route path="/pacients" element={<Clients />} />
               <Route path="/services" element={<Services />} />
               <Route path="/whatsapp" element={<WhatsApp />} />
               <Route path="/settings" element={<Settings />} />

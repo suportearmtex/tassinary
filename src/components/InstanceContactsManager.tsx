@@ -3,15 +3,16 @@ import React, { useState } from 'react';
 import { Plus, Phone, Trash2, Power, PowerOff, Loader2, Users, Shield } from 'lucide-react';
 import { useInstanceContactsService } from '../services/instanceContactsService';
 import { InstanceContact } from '../lib/types';
+import PhoneInput from 'react-phone-input-2';
 
 interface InstanceContactsManagerProps {
   instanceId: string;
   instanceStatus: string;
 }
 
-const InstanceContactsManager: React.FC<InstanceContactsManagerProps> = ({ 
-  instanceId, 
-  instanceStatus 
+const InstanceContactsManager: React.FC<InstanceContactsManagerProps> = ({
+  instanceId,
+  instanceStatus
 }) => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [contactName, setContactName] = useState('');
@@ -35,19 +36,22 @@ const InstanceContactsManager: React.FC<InstanceContactsManagerProps> = ({
   } = useInstanceContactsService(instanceId);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!phoneNumber.trim() || !contactName.trim()) {
-      return;
-    }
+  e.preventDefault();
+  if (!phoneNumber.trim() || !contactName.trim()) {
+    return;
+  }
 
-    await handleAddContact({
-      phoneNumber: phoneNumber.trim(),
-      contactName: contactName.trim(),
-    });
+  // Formatar o número para envio (remover caracteres especiais e manter apenas números)
+  const cleanNumber = phoneNumber.replace(/\D/g, '');
+  
+  await handleAddContact({
+    phoneNumber: cleanNumber,
+    contactName: contactName.trim(),
+  });
 
-    setPhoneNumber('');
-    setContactName('');
-  };
+  setPhoneNumber('');
+  setContactName('');
+};
 
   const formatPhoneNumber = (phone: string) => {
     // Formatar número para exibição (11999999999 -> (11) 99999-9999)
@@ -78,7 +82,7 @@ const InstanceContactsManager: React.FC<InstanceContactsManagerProps> = ({
             </p>
           </div>
         </div>
-        
+
         {canAddMore && (
           <button
             onClick={openAddModal}
@@ -113,16 +117,14 @@ const InstanceContactsManager: React.FC<InstanceContactsManagerProps> = ({
               className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-lg"
             >
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${
-                  contact.is_active 
-                    ? 'bg-green-100 dark:bg-green-900/30' 
+                <div className={`p-2 rounded-lg ${contact.is_active
+                    ? 'bg-green-100 dark:bg-green-900/30'
                     : 'bg-gray-100 dark:bg-gray-700'
-                }`}>
-                  <Phone className={`w-4 h-4 ${
-                    contact.is_active 
-                      ? 'text-green-600 dark:text-green-400' 
+                  }`}>
+                  <Phone className={`w-4 h-4 ${contact.is_active
+                      ? 'text-green-600 dark:text-green-400'
                       : 'text-gray-400'
-                  }`} />
+                    }`} />
                 </div>
                 <div>
                   <h4 className="font-medium text-gray-900 dark:text-white">
@@ -138,11 +140,10 @@ const InstanceContactsManager: React.FC<InstanceContactsManagerProps> = ({
                 <button
                   onClick={() => handleToggleContact(contact.id, contact.is_active)}
                   disabled={isUpdating}
-                  className={`p-2 rounded-lg transition-colors ${
-                    contact.is_active
+                  className={`p-2 rounded-lg transition-colors ${contact.is_active
                       ? 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
                       : 'bg-gray-100 text-gray-400 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-500'
-                  }`}
+                    }`}
                   title={contact.is_active ? 'Desativar' : 'Ativar'}
                 >
                   {contact.is_active ? (
@@ -184,7 +185,7 @@ const InstanceContactsManager: React.FC<InstanceContactsManagerProps> = ({
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Adicionar Número Autorizado
             </h3>
-            
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
@@ -204,22 +205,24 @@ const InstanceContactsManager: React.FC<InstanceContactsManagerProps> = ({
                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
                   Número do WhatsApp
                 </label>
-                <input
-                  type="tel"
+                <PhoneInput
+                  country={'br'}
                   value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="Ex: 11999999999"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
-                  required
+                  onChange={(phone) => setPhoneNumber(phone)}
+                  inputClass="!w-full !py-2 !pl-16 !pr-4 !rounded-md !border-gray-300 dark:!border-gray-600 dark:!bg-gray-700 dark:!text-white !shadow-sm focus:!ring-2 focus:!ring-green-500 focus:!border-green-500"
+                  containerClass="!w-full"
+                  buttonClass="!border-gray-300 dark:!border-gray-600 dark:!bg-gray-700 !rounded-l-md !w-14"
+                  dropdownClass="!bg-white dark:!bg-gray-700 !text-gray-900 dark:!text-white !border-gray-300 dark:!border-gray-600"
+                  placeholder="Ex: (41) 99999-9999"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Digite apenas números (DDD + número)
+                  Selecione o país e digite o número com DDD
                 </p>
               </div>
 
               <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-md">
                 <p className="text-sm text-blue-800 dark:text-blue-300">
-                  <strong>Importante:</strong> O número será validado via WhatsApp. 
+                  <strong>Importante:</strong> O número será validado via WhatsApp.
                   Apenas números ativos serão aceitos.
                 </p>
               </div>

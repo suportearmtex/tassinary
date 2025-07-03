@@ -345,29 +345,27 @@ export const useDashboardCompleto = () => {
   });
 
   // Funções utilitárias
-  const calcularEstatisticas = (appointments: Appointment[], filtro: 'hoje' | 'semana' | 'mes' | 'dia' = 'mes'): EstatisticasDashboard => {
-    const agendamentosFiltrados = servicoEstatisticasDashboard.obterAgendamentosPorPeriodo(appointments, filtro);
-    
-    // Usar função específica para hoje
-    const agendamentosHoje = servicoEstatisticasDashboard.obterAgendamentosHoje(appointments);
-    
-    // Calcular amanhã com string de data
-    const amanha = format(addDays(new Date(), 1), 'yyyy-MM-dd');
-    const agendamentosAmanha = appointments.filter(apt => apt.date === amanha);
+ const calcularEstatisticas = (appointments: Appointment[], filtro: 'hoje' | 'semana' | 'mes' | 'dia' = 'mes'): EstatisticasDashboard => {
+  const agendamentosFiltrados = servicoEstatisticasDashboard.obterAgendamentosPorPeriodo(appointments, filtro);
+  
+  // Usar função específica para hoje
+  const agendamentosHoje = servicoEstatisticasDashboard.obterAgendamentosHoje(appointments);
+  
+  // Calcular amanhã com string de data
+  const amanha = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+  const agendamentosAmanha = appointments.filter(apt => apt.date === amanha);
 
-    return {
-      totalAgendamentos: agendamentosFiltrados.length,
-      agendamentosHoje: agendamentosHoje.length,
-      agendamentosAmanha: agendamentosAmanha.length,
-      receitaTotal: agendamentosFiltrados
-        .filter(apt => apt.status === 'confirmed')
-        .reduce((sum, apt) => sum + parseFloat(apt.price?.toString() || '0'), 0),
-      agendamentosPendentes: agendamentosFiltrados.filter(apt => apt.status === 'pending').length,
-      agendamentosCompletos: agendamentosFiltrados.filter(apt => apt.status === 'confirmed').length,
-      agendamentosCancelados: agendamentosFiltrados.filter(apt => apt.status === 'cancelled').length,
-    };
+  return {
+    totalAgendamentos: agendamentosFiltrados.length,
+    agendamentosHoje: agendamentosHoje.length,
+    agendamentosAmanha: agendamentosAmanha.length,
+    // CORREÇÃO: Receita Total sem filtro (todos os agendamentos confirmados)
+    receitaTotal: agendamentosFiltrados.filter(apt => apt.status === 'confirmed').reduce((sum, apt) => sum + parseFloat(apt.price?.toString() || '0'), 0),
+    agendamentosPendentes: agendamentosFiltrados.filter(apt => apt.status === 'pending').length,
+    agendamentosCompletos: agendamentosFiltrados.filter(apt => apt.status === 'confirmed').length,
+    agendamentosCancelados: agendamentosFiltrados.filter(apt => apt.status === 'cancelled').length,
   };
-
+};
   const formatarMoeda = (valor: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 
@@ -380,23 +378,27 @@ export const useDashboardCompleto = () => {
     return `${hFim.toString().padStart(2, '0')}:${mFim.toString().padStart(2, '0')}`;
   };
 
-  const eventosCalendario = agendamentos.data && servicos.data ? 
-    agendamentos.data.map(apt => {
-      const inicio = parseISO(`${apt.date}T${apt.time}`);
-      const servico = servicos.data?.find(s => s.id === apt.service_id);
-      const fim = servico ? addMinutes(inicio, parseInt(servico.duration)) : inicio;
-      return {
-        id: apt.id,
-        title: `${apt.client?.name} - ${apt.service?.name}`,
-        start: inicio,
-        end: fim,
-        backgroundColor: apt.status === 'pending' ? '#3b82f6' : 
-                        apt.status === 'confirmed' ? '#10b981' : '#ef4444',
-        borderColor: apt.status === 'pending' ? '#2563eb' : 
-                     apt.status === 'confirmed' ? '#059669' : '#dc2626',
-        extendedProps: { appointment: apt },
-      };
-    }) : [];
+ const eventosCalendario = agendamentos.data && servicos.data ? 
+  agendamentos.data.map(apt => {
+    const inicio = parseISO(`${apt.date}T${apt.time}`);
+    const servico = servicos.data?.find(s => s.id === apt.service_id);
+    const fim = servico ? addMinutes(inicio, parseInt(servico.duration)) : inicio;
+    
+    // Corrigir nome do serviço para o título
+    const serviceName = apt.service?.name || apt.service_details?.name || apt.service || 'Serviço';
+    
+    return {
+      id: apt.id,
+      title: `${apt.client?.name} - ${serviceName}`,
+      start: inicio,
+      end: fim,
+      backgroundColor: apt.status === 'pending' ? '#3b82f6' : 
+                      apt.status === 'confirmed' ? '#10b981' : '#ef4444',
+      borderColor: apt.status === 'pending' ? '#2563eb' : 
+                   apt.status === 'confirmed' ? '#059669' : '#dc2626',
+      extendedProps: { appointment: apt },
+    };
+  }) : [];
 
   const clientesFiltrados = clientes.data?.filter(c => 
     c.name.toLowerCase().includes(filtroCliente.toLowerCase())
