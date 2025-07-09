@@ -1,13 +1,77 @@
 # 11. Nova versão - Build
-docker build -t jvg21/tassinary-app:v1.2.0 .
+docker build -t jvg21/tassinary-app:v1.2.1 .
 docker build -t jvg21/tassinary-app:latest .
 
 
 docker login
 
 # 12. Nova versão - Push
-docker push jvg21/tassinary-app:v1.2.0
+docker push jvg21/tassinary-app:v1.2.1
 docker push jvg21/tassinary-app:latest
 
 # 13. Verificar versões disponíveis
 docker images jvg21/tassinary-app
+
+// 🔧 CORREÇÃO: evolution-api/index.ts - Remover atualização automática de JID no GET
+
+// ANTES (código problemático):
+if (!existingInstance.jid) {
+  const jid = await fetchInstanceJid(existingInstance.instance_name);
+  if (jid) {
+    updateData.jid = jid; // ← REMOVE ESSA LINHA
+  }
+}
+
+// DEPOIS (código corrigido):
+// ❌ REMOVIDO: Não atualizar JID automaticamente no GET
+// O JID só deve ser atualizado pelo webhook de conexão
+
+// Handle GET request (check status only)
+const { data: existingInstance } = await supabase
+  .from('evolution_instances')
+  .select('*')
+  .eq('user_id', user.id)
+  .single();
+
+if (existingInstance) {
+  try {
+    const currentStatus = await checkInstanceStatus(existingInstance.instance_name);
+    const updateData = {
+      status: currentStatus
+    };
+
+    // ✅ APENAS atualizar QR code se desconectado
+    if (currentStatus === 'disconnected' && !existingInstance.qr_code) {
+      try {
+        const qrCode = await refreshQrCode(existingInstance.instance_name);
+        if (qrCode) {
+          updateData.qr_code = qrCode;
+        }
+      } catch (qrError) {
+        console.error('Failed to refresh QR code:', qrError);
+      }
+    }
+
+    // ✅ Atualizar apenas se status mudou ou tem QR novo
+    if (currentStatus !== existingInstance.status || updateData.qr_code) {
+      const { error: updateError } = await supabase
+        .from('evolution_instances')
+        .update(updateData)
+        .eq('id', existingInstance.id);
+
+      if (updateError) {
+        console.error('Database update error:', updateError);
+      }
+    }
+
+    return new Response(JSON.stringify({
+      ...existingInstance,
+      ...updateData
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    // Handle errors...
+  }
+}

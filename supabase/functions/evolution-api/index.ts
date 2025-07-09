@@ -117,11 +117,13 @@ async function createEvolutionInstance(userId, userEmail) {
       instanceName,
       qrcode: true,
       integration: 'WHATSAPP-BAILEYS',
+      groupsIgnore: true,
       // ✅ ADICIONADO: Configuração do webhook para N8N
       webhook: {
         url: n8nWebhookUrl,
         events: [
-          'MESSAGES_UPSERT'
+          'MESSAGES_UPSERT',
+          'CONNECTION_UPDATE'
         ],
         byEvents: false,
         base64: true,
@@ -316,24 +318,10 @@ Deno.serve(async (req)=>{
         const updateData = {
           status: currentStatus
         };
-        // ✅ ADICIONADO: Buscar e salvar JID quando conectado
-        if (currentStatus === 'connected' && !existingInstance.jid) {
-          console.log(`Instance ${existingInstance.instance_name} is connected, fetching JID...`);
-          const jid = await fetchInstanceJid(existingInstance.instance_name);
-          if (jid) {
-            console.log(`JID found for ${existingInstance.instance_name}: ${jid}`);
-            updateData.jid = jid;
-          }
-        }
-        // ✅ ADICIONADO: Também tentar buscar JID se não temos mas a API pode ter
-        if (!existingInstance.jid) {
-          console.log(`No JID stored, attempting to fetch from API...`);
-          const jid = await fetchInstanceJid(existingInstance.instance_name);
-          if (jid) {
-            console.log(`JID found and will be stored: ${jid}`);
-            updateData.jid = jid;
-          }
-        }
+        
+        // ✅ REMOVIDO: Linhas que atualizavam JID automaticamente
+        // JID será atualizado APENAS via webhook quando QR for escaneado
+        
         // If disconnected and no QR code, try to get one
         if (currentStatus === 'disconnected' && !existingInstance.qr_code) {
           try {
@@ -347,7 +335,7 @@ Deno.serve(async (req)=>{
           }
         }
         // Always update status in database if it changed or if we have new data
-        if (currentStatus !== existingInstance.status || updateData.qr_code || updateData.jid) {
+        if (currentStatus !== existingInstance.status || updateData.qr_code) {
           const { error: updateError } = await supabase.from('evolution_instances').update(updateData).eq('id', existingInstance.id);
           if (updateError) {
             console.error('Database update error:', updateError);

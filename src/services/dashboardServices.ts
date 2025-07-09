@@ -360,7 +360,8 @@ export const useDashboardCompleto = () => {
     agendamentosHoje: agendamentosHoje.length,
     agendamentosAmanha: agendamentosAmanha.length,
     // CORREÇÃO: Receita Total sem filtro (todos os agendamentos confirmados)
-    receitaTotal: agendamentosFiltrados.filter(apt => apt.status === 'confirmed').reduce((sum, apt) => sum + parseFloat(apt.price?.toString() || '0'), 0),
+    receitaTotal: agendamentosFiltrados.reduce((sum, apt) => sum + parseFloat(apt.price?.toString() || '0'), 0),
+    
     agendamentosPendentes: agendamentosFiltrados.filter(apt => apt.status === 'pending').length,
     agendamentosCompletos: agendamentosFiltrados.filter(apt => apt.status === 'confirmed').length,
     agendamentosCancelados: agendamentosFiltrados.filter(apt => apt.status === 'cancelled').length,
